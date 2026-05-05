@@ -1,0 +1,31 @@
+# DB
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+python-dotenv
+
+# Data
+pandas
+numpy
+
+# Modeling
+scikit-learn
+xgboost
+optuna
+mlflow
+shap
+matplotlib
+
+# API
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+httpx
+
+# HTTP / ingestion
+requests
+responses
+
+# Testing
+pytest
+pytest-cov
