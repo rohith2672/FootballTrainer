@@ -78,7 +78,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-002: Set up PostgreSQL with SQLAlchemy
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-001
 
 **Task:**
@@ -95,7 +95,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-003: Football Data API client
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-001
 
 **Task:**
@@ -112,7 +112,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-004: Ingest and persist raw match data
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-002, TICKET-003
 
 **Task:**
@@ -128,7 +128,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-005: Rolling form features
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-004
 
 **Task:**
@@ -147,7 +147,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-006: Head-to-head and home/away split features
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-004
 
 **Task:**
@@ -164,7 +164,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-007: Build master feature table
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-005, TICKET-006
 
 **Task:**
@@ -180,7 +180,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-008: Baseline model — Logistic Regression
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-007
 
 **Task:**

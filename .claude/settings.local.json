@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv\\\\Scripts\\\\python.exe -m pytest tests/test_api_client.py -v)",
+      "Bash(python -m pytest tests/test_ingest.py -v)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_ingest.py -v)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_ingest.py -v)",
+      "Bash(venv/Scripts/python.exe -c \"from src.ingestion.ingest import ingest_matches, ingest_teams, LEAGUE, SEASONS; print\\('OK', LEAGUE, SEASONS\\)\")",
+      "Bash(python -m pytest tests/test_form.py -v)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_form.py -v)",
+      "Bash(python -m pytest tests/test_h2h.py -v)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_h2h.py -v)",
+      "PowerShell(& \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\venv\\\\Scripts\\\\python.exe\" -m pytest \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\tests\\\\test_h2h.py\" -v 2>&1)"
+    ]
+  }
+}
