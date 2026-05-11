@@ -68,6 +68,7 @@ def get_matches(league_code: str, season: int) -> dict:
     return _get(f"/competitions/{league_code}/matches", params={"season": season})
 
 
-def get_teams(league_code: str) -> dict:
+def get_teams(league_code: str, season: int | None = None) -> dict:
     """Fetch all teams for a competition."""
-    return _get(f"/competitions/{league_code}/teams")
+    params = {"season": season} if season is not None else None
+    return _get(f"/competitions/{league_code}/teams", params=params)

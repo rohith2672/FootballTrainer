@@ -28,7 +28,16 @@
       "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_api.py -v)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\" -Recurse -Filter \"*.txt\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(python -m pytest tests/ -v --tb=short)"
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose ps *)",
+      "Bash(curl *)",
+      "Bash(docker-compose restart *)",
+      "Bash(docker-compose exec *)",
+      "Bash(docker exec footballtrainer-app-1 *)",
+      "Bash(docker network *)",
+      "Bash(docker-compose down *)",
+      "Bash(python -m json.tool)"
     ]
   }
 }

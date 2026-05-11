@@ -289,7 +289,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-014: Write project README
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-013
 
 **Task:**

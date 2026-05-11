@@ -10,7 +10,7 @@ from src.models import Match, Team
 logger = logging.getLogger(__name__)
 
 LEAGUE = "PL"
-SEASONS = [2021, 2022, 2023]
+SEASONS = [2023, 2024]
 
 
 def _parse_result(home_goals: int | None, away_goals: int | None) -> str | None:
@@ -24,7 +24,7 @@ def _parse_result(home_goals: int | None, away_goals: int | None) -> str | None:
 
 
 def ingest_teams(league: str = LEAGUE) -> None:
-    data = get_teams(league)
+    data = get_teams(league, season=SEASONS[-1])
     teams = data.get("teams", [])
 
     rows = [{"id": t["id"], "name": t["name"], "league": league} for t in teams]
