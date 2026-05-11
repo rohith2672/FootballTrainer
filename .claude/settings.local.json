@@ -10,7 +10,25 @@
       "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_form.py -v)",
       "Bash(python -m pytest tests/test_h2h.py -v)",
       "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_h2h.py -v)",
-      "PowerShell(& \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\venv\\\\Scripts\\\\python.exe\" -m pytest \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\tests\\\\test_h2h.py\" -v 2>&1)"
+      "PowerShell(& \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\venv\\\\Scripts\\\\python.exe\" -m pytest \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\\\\tests\\\\test_h2h.py\" -v 2>&1)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\" -Recurse -Exclude venv,.git)",
+      "Bash(Select-Object -Property FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(venv\\\\Scripts\\\\python.exe -m pytest tests/test_train_xgb.py -v)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/test_train_xgb.py -v)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/test_train_xgb.py::test_main_creates_xgb_artifact -v)",
+      "Bash(python -c \"import shap; print\\(shap.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -c \"import pandas as pd; df = pd.read_csv\\('data/processed/features.csv'\\); print\\(df.shape, df.columns.tolist\\(\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -m src.model.train)",
+      "Bash(python -m src.model.evaluate)",
+      "Bash(python -c \"import os; print\\(os.path.exists\\('data/processed/shap_summary.png'\\), os.path.exists\\('data/processed/eval_report.txt'\\)\\)\")",
+      "Bash(python -m pytest tests/test_api.py -v)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_api.py -v)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\" -Recurse -Filter \"*.txt\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(python -m pytest tests/ -v --tb=short)"
     ]
   }
 }

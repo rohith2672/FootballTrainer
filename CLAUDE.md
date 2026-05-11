@@ -197,7 +197,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-009: XGBoost model with hyperparameter tuning
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-008
 
 **Task:**
@@ -217,7 +217,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-010: Feature importance analysis
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-009
 
 **Task:**
@@ -236,7 +236,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-011: FastAPI prediction endpoint
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-010
 
 **Task:**
@@ -255,7 +255,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-012: Health check and team listing endpoints
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-011
 
 **Task:**
@@ -269,7 +269,7 @@ Create the full folder structure for `football-predictor/`:
 ---
 
 ### TICKET-013: Dockerize the application
-**Status:** TODO  
+**Status:** DONE  
 **Depends on:** TICKET-012
 
 **Task:**
