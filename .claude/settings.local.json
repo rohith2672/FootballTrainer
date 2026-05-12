@@ -37,7 +37,20 @@
       "Bash(docker exec footballtrainer-app-1 *)",
       "Bash(docker network *)",
       "Bash(docker-compose down *)",
-      "Bash(python -m json.tool)"
+      "Bash(python -m json.tool)",
+      "Bash(venv\\\\Scripts\\\\alembic.exe upgrade *)",
+      "PowerShell(docker exec footballtrainer-db-1 *)",
+      "Bash(docker exec footballtrainer-db-1 *)",
+      "PowerShell(netstat *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(findstr *)",
+      "Bash(./venv/Scripts/alembic.exe upgrade *)",
+      "Bash(./venv/Scripts/alembic.exe current *)",
+      "Bash(./venv/Scripts/python.exe -m src.ingestion.ingest)",
+      "Bash(./venv/Scripts/python.exe -m src.features.build_dataset)",
+      "Bash(./venv/Scripts/python.exe -m src.model.train)",
+      "Bash(./venv/Scripts/python.exe -m src.model.evaluate)",
+      "Bash(./venv/Scripts/pip.exe install *)"
     ]
   }
 }

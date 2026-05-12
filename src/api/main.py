@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Football Match Predictor", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class PredictRequest(BaseModel):
@@ -152,3 +161,59 @@ def list_teams(db: Session = Depends(get_db)):
     teams = db.query(Team).order_by(Team.name).all()
     logger.info("teams | returned %d teams", len(teams))
     return [t.name for t in teams]
+
+
+from src.ingestion.api_client import get_upcoming_matches
+
+class UpcomingMatchResponse(BaseModel):
+    home_team: str
+    away_team: str
+    date: str
+    home_win: float
+    draw: float
+    away_win: float
+
+@app.get("/upcoming", response_model=list[UpcomingMatchResponse])
+def get_upcoming(db: Session = Depends(get_db)):
+    try:
+        raw_data = get_upcoming_matches("PL")
+    except Exception as e:
+        logger.error("Failed to fetch upcoming matches: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to fetch upcoming matches from upstream API")
+    
+    matches = raw_data.get("matches", [])
+    results = []
+    for m in matches:
+        home_team = m.get("homeTeam", {}).get("name")
+        away_team = m.get("awayTeam", {}).get("name")
+        match_date_str = m.get("utcDate")
+        if not home_team or not away_team or not match_date_str:
+            continue
+            
+        try:
+            match_date = datetime.datetime.fromisoformat(match_date_str.replace("Z", "+00:00")).date()
+        except ValueError:
+            continue
+        
+        if not db.query(Team).filter(Team.name == home_team).first() or \
+           not db.query(Team).filter(Team.name == away_team).first():
+            continue
+            
+        try:
+            features = compute_features_for_match(db, home_team, away_team, match_date)
+            model = app.state.model
+            proba = model.predict_proba(features)[0]
+            results.append(
+                UpcomingMatchResponse(
+                    home_team=home_team,
+                    away_team=away_team,
+                    date=match_date.isoformat(),
+                    home_win=float(proba[0]),
+                    draw=float(proba[1]),
+                    away_win=float(proba[2])
+                )
+            )
+        except Exception as e:
+            logger.warning("Could not compute prediction for %s vs %s: %s", home_team, away_team, e)
+            
+    return results

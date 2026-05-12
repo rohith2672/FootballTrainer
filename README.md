@@ -51,9 +51,17 @@ An end-to-end ML pipeline that predicts Premier League match outcomes (Home Win 
 │                                                                 │
 │         src/api/main.py  (FastAPI, port 8000)                  │
 │         ├── POST /predict                                       │
+│         ├── GET  /upcoming                                      │
 │         ├── GET  /health                                        │
 │         └── GET  /teams                                         │
 │                                                                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼──────────────────────────────────────┐
+│                    Frontend UI (Port 3000)                     │
+│                                                                │
+│        React / Vite application with premium styling          │
+│        Displays upcoming match predictions dynamically         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,10 +101,11 @@ MLFLOW_TRACKING_URI=http://localhost:5000
 docker-compose up --build
 ```
 
-This starts three services:
+This starts four services:
 
 | Service | Port | Description |
 |---------|------|-------------|
+| `frontend`| 3000 | React Vite UI Dashboard |
 | `app`   | 8000 | FastAPI prediction server |
 | `db`    | 5432 | PostgreSQL 15 database |
 | `mlflow`| 5000 | MLflow tracking UI |
@@ -233,7 +242,14 @@ FootballTrainer/
 │   │   ├── evaluate.py             # SHAP analysis and evaluation report
 │   │   └── artifacts/              # Saved model pickles
 │   └── api/
-│       └── main.py                 # FastAPI app (predict, health, teams endpoints)
+│       └── main.py                 # FastAPI app (predict, health, teams, upcoming endpoints)
+├── frontend/                       # React / Vite Frontend Application
+│   ├── src/
+│   │   ├── components/             # MatchCard and Dashboard components
+│   │   ├── App.jsx                 # Main application component
+│   │   └── index.css               # Premium dark-mode UI styling
+│   ├── Dockerfile                  # Multi-stage build for frontend
+│   └── package.json
 ├── tests/                          # pytest test suite
 ├── Dockerfile
 ├── docker-compose.yml

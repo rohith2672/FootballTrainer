@@ -72,3 +72,8 @@ def get_teams(league_code: str, season: int | None = None) -> dict:
     """Fetch all teams for a competition."""
     params = {"season": season} if season is not None else None
     return _get(f"/competitions/{league_code}/teams", params=params)
+
+
+def get_upcoming_matches(league_code: str) -> dict:
+    """Fetch upcoming scheduled matches for a competition."""
+    return _get(f"/competitions/{league_code}/matches", params={"status": "SCHEDULED"})

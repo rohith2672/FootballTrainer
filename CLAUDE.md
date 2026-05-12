@@ -9,6 +9,7 @@ using historical match data, feature engineering, and an XGBoost classifier serv
 - **Processing**: pandas, numpy
 - **Modeling**: scikit-learn, XGBoost, Optuna, MLflow, SHAP
 - **API**: FastAPI, Pydantic
+- **Frontend**: React, Vite, CSS (Premium UI)
 - **Infra**: Docker, docker-compose, python-dotenv
 
 ## Folder Structure
@@ -33,6 +34,13 @@ football-predictor/
 │   │   └── artifacts/
 │   └── api/
 │       └── main.py
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── App.jsx
+│   │   └── index.css
+│   ├── package.json
+│   └── Dockerfile
 ├── tests/
 ├── Dockerfile
 ├── docker-compose.yml
@@ -51,7 +59,7 @@ MLFLOW_TRACKING_URI=http://localhost:5000
 ## Execution Order
 Complete tickets in this order — each ticket depends on the previous:
 ```
-001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 → 011 → 012 → 013 → 014
+001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 → 011 → 012 → 013 → 014 → 015 → 016
 ```
 
 ---
@@ -308,6 +316,52 @@ Write `README.md` covering:
 - Known limitations and next steps (e.g., add more leagues, Elo ratings feature, betting odds as feature)
 
 **Done when:** README renders cleanly on GitHub, all commands are copy-pasteable and correct
+
+---
+
+### TICKET-015: Build Premium Frontend UI for Upcoming Matches
+**Status:** DONE  
+**Depends on:** TICKET-013
+
+**Task:**
+- Add a new `GET /upcoming` endpoint to the FastAPI app that computes predictions for future matches.
+- Enable `CORSMiddleware` in FastAPI.
+- Initialize a React + Vite application in the `frontend/` directory.
+- Design a premium, dark-mode, glassmorphism UI using vanilla CSS (`index.css`).
+- Build `Dashboard.jsx` to fetch and render the `/upcoming` predictions dynamically.
+- Build `MatchCard.jsx` to visualize win/draw/loss probabilities using animated bars.
+- Add a multi-stage `Dockerfile` to the frontend utilizing Nginx.
+- Add the `frontend` service (port 3000) to `docker-compose.yml`.
+
+**Done when:** Running `docker-compose up` serves the beautiful UI on port 3000 displaying upcoming matches securely fetched from the backend.
+
+---
+
+### TICKET-016: Live Endpoint Testing & Validation
+**Status:** DONE  
+**Date completed:** 2026-05-12  
+**Depends on:** TICKET-012, TICKET-013
+
+**Task:**
+- Run the full `pytest tests/test_api.py` suite against the FastAPI app using `TestClient` (mocked DB + model)
+- Spin up the PostgreSQL DB via `docker-compose up -d db` and start the uvicorn server locally
+- Run Alembic migrations (`alembic upgrade head`) against the live Docker DB
+- Validate all 3 endpoints live via Swagger UI at `http://localhost:8000/docs`:
+  - `GET /health` → `200 {"status": "ok", "model": "xgb_best", "version": "1.0.0"}`
+  - `GET /teams` → `200` alphabetically sorted list of 20 Premier League teams
+  - `POST /predict` (valid) → `200` with probabilities summing to 1.0
+  - `POST /predict` (same team) → `422` "home_team and away_team must differ"
+  - `POST /predict` (bad date) → `422` "must be YYYY-MM-DD format"
+  - `POST /predict` (unknown team) → `422` "Team not found: Unknown FC"
+
+**Results:**
+- `pytest tests/test_api.py` — **11/11 passed** in 4.32s (Python 3.14.0 / pytest 9.0.3)
+- Live server — all 6 Swagger UI tests passed
+- Example live prediction: Arsenal FC vs Chelsea FC (2024-03-01) →
+  `{"home_win": 0.5066, "draw": 0.0821, "away_win": 0.4112}` (sums to 1.0 ✅)
+- Structured request logs confirmed in uvicorn console output
+
+**Done when:** All unit tests pass and all 3 live endpoints return correct responses with the Docker DB running
 
 ---
 
