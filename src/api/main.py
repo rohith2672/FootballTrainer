@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import pickle
 from contextlib import asynccontextmanager
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.features.form import _compute_form_from_matches
 from src.features.h2h import _compute_h2h_from_matches
-from src.model.train import FEATURE_COLS, XGB_PATH
+from src.model.train import BEST_MODEL_PATH, FEATURE_COLS, REGISTRY_PATH
 from src.models import Match, Team
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    with open(XGB_PATH, "rb") as f:
+    with open(BEST_MODEL_PATH, "rb") as f:
         app.state.model = pickle.load(f)
     yield
 
@@ -153,7 +154,12 @@ def predict(request: PredictRequest, db: Session = Depends(get_db)):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "xgb_best", "version": "1.0.0"}
+    try:
+        with open(REGISTRY_PATH) as f:
+            reg = json.load(f)
+        return {"status": "ok", "model": reg["best_model"], "log_loss": reg["log_loss"], "version": "1.0.0"}
+    except Exception:
+        return {"status": "ok", "model": "xgb_best", "version": "1.0.0"}
 
 
 @app.get("/teams")
@@ -172,48 +178,61 @@ class UpcomingMatchResponse(BaseModel):
     home_win: float
     draw: float
     away_win: float
+    league: str
 
 @app.get("/upcoming", response_model=list[UpcomingMatchResponse])
 def get_upcoming(db: Session = Depends(get_db)):
-    try:
-        raw_data = get_upcoming_matches("PL")
-    except Exception as e:
-        logger.error("Failed to fetch upcoming matches: %s", e)
-        raise HTTPException(status_code=502, detail="Failed to fetch upcoming matches from upstream API")
-    
-    matches = raw_data.get("matches", [])
+    leagues = ["PL", "PD", "SA", "BL1", "FL1", "CL"]
     results = []
-    for m in matches:
-        home_team = m.get("homeTeam", {}).get("name")
-        away_team = m.get("awayTeam", {}).get("name")
-        match_date_str = m.get("utcDate")
-        if not home_team or not away_team or not match_date_str:
-            continue
-            
+    
+    for league in leagues:
         try:
-            match_date = datetime.datetime.fromisoformat(match_date_str.replace("Z", "+00:00")).date()
-        except ValueError:
+            raw_data = get_upcoming_matches(league)
+        except Exception as e:
+            logger.error("Failed to fetch upcoming matches for %s: %s", league, e)
             continue
         
-        if not db.query(Team).filter(Team.name == home_team).first() or \
-           not db.query(Team).filter(Team.name == away_team).first():
-            continue
+        matches = raw_data.get("matches", [])
+        for m in matches:
+            home_team = m.get("homeTeam", {}).get("name")
+            away_team = m.get("awayTeam", {}).get("name")
+            match_date_str = m.get("utcDate")
+            if not home_team or not away_team or not match_date_str:
+                continue
+                
+            try:
+                match_date = datetime.datetime.fromisoformat(match_date_str.replace("Z", "+00:00")).date()
+            except ValueError:
+                continue
             
-        try:
-            features = compute_features_for_match(db, home_team, away_team, match_date)
-            model = app.state.model
-            proba = model.predict_proba(features)[0]
-            results.append(
-                UpcomingMatchResponse(
-                    home_team=home_team,
-                    away_team=away_team,
-                    date=match_date.isoformat(),
-                    home_win=float(proba[0]),
-                    draw=float(proba[1]),
-                    away_win=float(proba[2])
+            try:
+                features = compute_features_for_match(db, home_team, away_team, match_date)
+                model = app.state.model
+                proba = model.predict_proba(features)[0]
+                results.append(
+                    UpcomingMatchResponse(
+                        home_team=home_team,
+                        away_team=away_team,
+                        date=match_date.isoformat(),
+                        home_win=float(proba[0]),
+                        draw=float(proba[1]),
+                        away_win=float(proba[2]),
+                        league=league
+                    )
                 )
-            )
-        except Exception as e:
-            logger.warning("Could not compute prediction for %s vs %s: %s", home_team, away_team, e)
-            
+            except Exception as e:
+                logger.warning("Could not compute prediction for %s vs %s: %s", home_team, away_team, e)
+                # Fallback to display the match even if prediction fails
+                results.append(
+                    UpcomingMatchResponse(
+                        home_team=home_team,
+                        away_team=away_team,
+                        date=match_date.isoformat(),
+                        home_win=0.33,
+                        draw=0.34,
+                        away_win=0.33,
+                        league=league
+                    )
+                )
+                
     return results

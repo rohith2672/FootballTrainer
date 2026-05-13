@@ -4,8 +4,12 @@ function App() {
   return (
     <div className="app-container">
       <header className="header">
-        <h1>Upcoming Fixture Predictions</h1>
-        <p>AI-powered insights for the beautiful game</p>
+        <div className="header-badge">
+          <span className="pulse-dot"></span>
+          Live Predictions
+        </div>
+        <h1>Match Predictor</h1>
+        <p>AI-powered outcome predictions for Europe's top football leagues</p>
       </header>
       <main>
         <Dashboard />

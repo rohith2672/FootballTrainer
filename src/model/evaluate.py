@@ -10,6 +10,7 @@ import shap
 from sklearn.metrics import accuracy_score, log_loss, confusion_matrix
 
 from src.model.train import (
+    BEST_MODEL_PATH,
     FEATURE_COLS,
     TARGET_COL,
     XGB_PATH,
@@ -21,7 +22,7 @@ SHAP_PLOT_PATH = os.path.join("data", "processed", "shap_summary.png")
 EVAL_REPORT_PATH = os.path.join("data", "processed", "eval_report.txt")
 
 
-def load_model(path: str = XGB_PATH):
+def load_model(path: str = BEST_MODEL_PATH):
     with open(path, "rb") as f:
         return pickle.load(f)
 
@@ -75,7 +76,7 @@ def save_eval_report(
 
 def main():
     model = load_model()
-    training_date = datetime.datetime.fromtimestamp(os.path.getmtime(XGB_PATH)).strftime(
+    training_date = datetime.datetime.fromtimestamp(os.path.getmtime(BEST_MODEL_PATH)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
 
@@ -98,7 +99,7 @@ def main():
     else:
         mean_abs = np.abs(shap_values).mean(axis=(0, 2))
 
-    top10 = save_eval_report(XGB_PATH, training_date, acc, ll, cm, FEATURE_COLS, mean_abs)
+    top10 = save_eval_report(BEST_MODEL_PATH, training_date, acc, ll, cm, FEATURE_COLS, mean_abs)
 
     print(f"Accuracy:  {acc:.4f}")
     print(f"Log-Loss:  {ll:.4f}")

@@ -363,6 +363,22 @@ Write `README.md` covering:
 
 **Done when:** All unit tests pass and all 3 live endpoints return correct responses with the Docker DB running
 
+### TICKET-017: Multi-League Dashboard Support
+**Status:** DONE  
+**Date completed:** 2026-05-12  
+**Depends on:** TICKET-015
+
+**Task:**
+- Update `/upcoming` backend endpoint to fetch matches for top 5 leagues + Champions League (`PL`, `PD`, `SA`, `BL1`, `FL1`, `CL`).
+- Include `league` property in the API response.
+- Remove strict DB check to allow matches to be returned even if missing historical features (falling back to generic predictions).
+- Update frontend `Dashboard.jsx` to group and display matches by league.
+- Add CSS styling for league section headers.
+- Rebuild Docker containers.
+
+**Results:**
+- Dashboard successfully displays upcoming fixtures categorized by league.
+
 ---
 
 ## Key Rules for Claude Code

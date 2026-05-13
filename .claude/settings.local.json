@@ -50,7 +50,9 @@
       "Bash(./venv/Scripts/python.exe -m src.features.build_dataset)",
       "Bash(./venv/Scripts/python.exe -m src.model.train)",
       "Bash(./venv/Scripts/python.exe -m src.model.evaluate)",
-      "Bash(./venv/Scripts/pip.exe install *)"
+      "Bash(./venv/Scripts/pip.exe install *)",
+      "Bash(Select-String -NotMatch \"UserWarning|warnings.warn|validation.py\")",
+      "PowerShell(cd \"C:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\FootballTrainer\"; python -m src.model.train 2>&1 | Where-Object { $_ -notmatch \"UserWarning|warnings.warn|validation.py|site-packages|artifact_path|cloudpickle|skops|scikit-learn\" })"
     ]
   }
 }
