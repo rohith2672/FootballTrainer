@@ -64,3 +64,36 @@ class Match(Base):
     odds_source = Column(String, nullable=True)
 
     source = Column(String, nullable=False, default="fdorg", server_default="fdorg")  # fdorg | couk
+
+
+class Prediction(Base):
+    """A model prediction stored before kickoff (basis of the live track record).
+
+    One row per (fixture natural key, model_version); re-predicting before
+    kickoff overwrites the probabilities, so the stored row is the latest
+    pre-kickoff prediction. Rows are never touched once kickoff has passed.
+    Timestamps are naive UTC (set from Python, not server defaults).
+    """
+
+    __tablename__ = "predictions"
+    __table_args__ = (
+        UniqueConstraint(
+            "league", "match_day", "home_team", "away_team", "model_version",
+            name="uq_predictions_fixture_model",
+        ),
+        Index("ix_predictions_kickoff", "kickoff"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    fixture_id = Column(BigInteger, nullable=True)  # football-data.org match id
+    league = Column(String, nullable=False)
+    match_day = Column(Date, nullable=False)        # UTC calendar day of kickoff
+    home_team = Column(String, nullable=False)
+    away_team = Column(String, nullable=False)
+    kickoff = Column(DateTime, nullable=False)      # naive UTC
+    model_version = Column(String, nullable=False)
+    home_win = Column(Float, nullable=False)
+    draw = Column(Float, nullable=False)
+    away_win = Column(Float, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)

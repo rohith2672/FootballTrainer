@@ -20,9 +20,13 @@ else:
     SessionLocal = None
 
 
+class DatabaseNotConfigured(EnvironmentError):
+    pass
+
+
 def get_db():
     if SessionLocal is None:
-        raise EnvironmentError("DATABASE_URL is not set — copy .env.example to .env")
+        raise DatabaseNotConfigured("DATABASE_URL is not set — copy .env.example to .env")
     db = SessionLocal()
     try:
         yield db
