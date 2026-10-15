@@ -75,3 +75,22 @@ def test_save_model_creates_file():
             loaded = pickle.load(f)
         preds = loaded.predict(test[FEATURE_COLS])
         assert len(preds) == len(test)
+
+
+def test_split_by_date_never_separates_equal_timestamps():
+    df = _make_df(100)
+    df["date"] = df["date"].dt.normalize()
+    df.loc[75:85, "date"] = df.loc[80, "date"]  # a block of ties around the cutoff
+    df = df.sort_values("date").reset_index(drop=True)
+    train, test = split_by_date(df, test_fraction=0.2)
+    assert train["date"].max() < test["date"].min()
+    assert len(train) + len(test) == len(df)
+
+
+def test_train_baseline_is_a_nan_tolerant_pipeline():
+    df = _make_df(80)
+    df.loc[::7, FEATURE_COLS[0]] = np.nan
+    train, test = split_by_date(df, test_fraction=0.2)
+    model, acc, ll, cm = train_baseline(train, test)
+    assert np.isfinite(ll)
+    assert [name for name, _ in model.steps] == ["imputer", "scaler", "logreg"]
