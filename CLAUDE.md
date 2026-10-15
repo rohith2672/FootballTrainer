@@ -1,5 +1,24 @@
 # Football Match Outcome Predictor — Claude Code Context
 
+## Current session context (2026-09-28)
+
+Read [MEMORY.md](MEMORY.md) first for the current handoff and
+[AGENTS.md](AGENTS.md) for working rules. The tickets below are historical records;
+their validation results have not been rerun in this session.
+
+- Working branch: local `dev`, tracking `origin/dev`, at `6172844` when reviewed.
+- Training now compares Logistic Regression, XGBoost, LightGBM, calibrated
+  variants and a stacking ensemble; the API loads `best_model.pkl`.
+- The committed registry records Logistic Regression with log-loss 1.023617 on
+  2026-05-13. Model pickles and processed data are absent in this checkout.
+- Upcoming fixtures and the dashboard cover PL, PD, SA, BL1, FL1 and CL, but
+  ingestion still defaults to PL seasons 2023 and 2024. Prediction errors produce
+  generic 0.33/0.34/0.33 values without a fallback indicator in the response.
+- README and older ticket descriptions retain earlier seasons, model paths and
+  API behavior. Use current source plus MEMORY.md for implementation context.
+- The next product addition has not been selected. This session only switched
+  branches and prepared documentation; it did not validate or change application code.
+
 ## Project Overview
 An end-to-end ML pipeline that predicts Premier League match outcomes (Home Win / Draw / Away Win)
 using historical match data, feature engineering, and an XGBoost classifier served via FastAPI.
@@ -378,6 +397,24 @@ Write `README.md` covering:
 
 **Results:**
 - Dashboard successfully displays upcoming fixtures categorized by league.
+
+---
+
+### TICKET-018 to TICKET-022: predictive-quality overhaul (2026-10-15)
+**Status:** DONE (code committed on `dev`; Postgres and live-API paths not verified)
+**Plan:** see MEMORY.md and `docs/api_contract.md`.
+
+- **018 evaluation:** season walk-forward CV with an untouched final holdout,
+  baselines (uniform, class prior, Elo, bookmaker, Shin), importable model wrappers.
+- **019 data:** football-data.co.uk history (5 leagues, ~10 seasons, shots, closing
+  odds), canonical team names, natural-key upsert, migration `0002`.
+- **020 features:** one point-in-time engine shared by training and serving, Elo,
+  37 features. First real run: LightGBM holdout log-loss 0.9942 vs bookmaker 0.9764
+  (gap +0.018 on 2049 matches; accepted, odds used as a benchmark only).
+- **021 serving:** engine-based features, no silent fallback, `top_factors`,
+  stored predictions (migration `0003`), `/track-record`, real `/health`.
+- **022 UI:** filters/refresh/a11y, honest no-prediction cards, explanation panel,
+  track-record page, nginx `/api` proxy.
 
 ---
 
