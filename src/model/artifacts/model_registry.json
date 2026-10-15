@@ -1,5 +1,622 @@
 {
-  "best_model": "logistic_regression",
-  "log_loss": 1.023617,
-  "trained_at": "2026-05-13 10:41:46"
+  "best_model": "lgbm",
+  "log_loss": 0.994237,
+  "walk_forward_log_loss": 0.989072,
+  "walk_forward_accuracy": 0.525138,
+  "holdout_log_loss": 0.994237,
+  "holdout_accuracy": 0.51879,
+  "holdout_confusion_matrix": [
+    [
+      712,
+      1,
+      192
+    ],
+    [
+      320,
+      0,
+      201
+    ],
+    [
+      272,
+      0,
+      351
+    ]
+  ],
+  "selection": {
+    "metric": "mean walk-forward log-loss (holdout excluded)",
+    "mode": "season",
+    "n_folds": 8,
+    "fold_labels": [
+      "season 2017",
+      "season 2018",
+      "season 2019",
+      "season 2020",
+      "season 2021",
+      "season 2022",
+      "season 2023",
+      "season 2024"
+    ],
+    "fold_sizes": [
+      [
+        1826,
+        1826
+      ],
+      [
+        3652,
+        1826
+      ],
+      [
+        5478,
+        1725
+      ],
+      [
+        7203,
+        1826
+      ],
+      [
+        9029,
+        1826
+      ],
+      [
+        10855,
+        1826
+      ],
+      [
+        12681,
+        1752
+      ],
+      [
+        14433,
+        1752
+      ]
+    ],
+    "optuna_trials": 25,
+    "seed": 42,
+    "calibration_method": "sigmoid",
+    "holdout_includes_partial_season": true
+  },
+  "models": {
+    "logistic_regression": {
+      "walk_forward_log_loss": 0.993449,
+      "walk_forward_accuracy": 0.524749,
+      "fold_log_loss": [
+        0.994184,
+        0.993328,
+        1.004713,
+        1.008728,
+        0.997776,
+        0.987922,
+        0.973456,
+        0.987485
+      ],
+      "fold_accuracy": [
+        0.528478,
+        0.513143,
+        0.515362,
+        0.521358,
+        0.529025,
+        0.53012,
+        0.526826,
+        0.533676
+      ],
+      "holdout_log_loss": 0.99245,
+      "holdout_accuracy": 0.514397
+    },
+    "xgboost": {
+      "walk_forward_log_loss": 0.98924,
+      "walk_forward_accuracy": 0.52601,
+      "fold_log_loss": [
+        0.978661,
+        0.983281,
+        0.995727,
+        1.005265,
+        0.996518,
+        0.988602,
+        0.979248,
+        0.986616
+      ],
+      "fold_accuracy": [
+        0.535597,
+        0.517525,
+        0.518261,
+        0.508215,
+        0.530668,
+        0.535597,
+        0.530251,
+        0.531963
+      ],
+      "holdout_log_loss": 0.994044,
+      "holdout_accuracy": 0.514885
+    },
+    "lgbm": {
+      "walk_forward_log_loss": 0.989072,
+      "walk_forward_accuracy": 0.525138,
+      "fold_log_loss": [
+        0.9778,
+        0.981986,
+        0.997127,
+        1.003817,
+        0.997661,
+        0.988334,
+        0.979343,
+        0.986507
+      ],
+      "fold_accuracy": [
+        0.53724,
+        0.520811,
+        0.511884,
+        0.508762,
+        0.52793,
+        0.533406,
+        0.52968,
+        0.531393
+      ],
+      "holdout_log_loss": 0.994237,
+      "holdout_accuracy": 0.51879
+    },
+    "calibrated_lr": {
+      "walk_forward_log_loss": 0.998667,
+      "walk_forward_accuracy": 0.518147,
+      "fold_log_loss": [
+        1.001401,
+        0.993218,
+        1.007176,
+        1.010019,
+        0.998235,
+        1.002719,
+        0.987772,
+        0.988792
+      ],
+      "fold_accuracy": [
+        0.520263,
+        0.506024,
+        0.514783,
+        0.506572,
+        0.524644,
+        0.517525,
+        0.525685,
+        0.52968
+      ],
+      "holdout_log_loss": 0.989821,
+      "holdout_accuracy": 0.524646
+    },
+    "calibrated_xgb": {
+      "walk_forward_log_loss": 0.992007,
+      "walk_forward_accuracy": 0.523206,
+      "fold_log_loss": [
+        0.994712,
+        0.97754,
+        0.993775,
+        1.008008,
+        0.997459,
+        0.998984,
+        0.979109,
+        0.986468
+      ],
+      "fold_accuracy": [
+        0.52793,
+        0.519715,
+        0.521159,
+        0.50931,
+        0.524096,
+        0.524644,
+        0.52911,
+        0.52968
+      ],
+      "holdout_log_loss": 0.993506,
+      "holdout_accuracy": 0.516349
+    },
+    "calibrated_lgbm": {
+      "walk_forward_log_loss": 0.991358,
+      "walk_forward_accuracy": 0.524535,
+      "fold_log_loss": [
+        0.99197,
+        0.977796,
+        0.993786,
+        1.006551,
+        0.997037,
+        0.998242,
+        0.978649,
+        0.986831
+      ],
+      "fold_accuracy": [
+        0.52793,
+        0.522453,
+        0.522319,
+        0.507119,
+        0.529573,
+        0.524096,
+        0.533105,
+        0.52968
+      ],
+      "holdout_log_loss": 0.993003,
+      "holdout_accuracy": 0.519766
+    },
+    "ensemble": {
+      "walk_forward_log_loss": 0.990511,
+      "walk_forward_accuracy": 0.523576,
+      "fold_log_loss": [
+        0.986481,
+        0.988199,
+        0.996684,
+        1.000547,
+        1.001676,
+        0.989852,
+        0.975565,
+        0.985088
+      ],
+      "fold_accuracy": [
+        0.524096,
+        0.518072,
+        0.516522,
+        0.514786,
+        0.523001,
+        0.535049,
+        0.526256,
+        0.530822
+      ],
+      "holdout_log_loss": 0.991662,
+      "holdout_accuracy": 0.516837
+    }
+  },
+  "baselines": {
+    "uniform": {
+      "walk_forward_log_loss": 1.098612,
+      "walk_forward_accuracy": 0.434593,
+      "fold_log_loss": [
+        1.098612,
+        1.098612,
+        1.098612,
+        1.098612,
+        1.098612,
+        1.098612,
+        1.098612,
+        1.098612
+      ],
+      "fold_accuracy": [
+        0.45345,
+        0.447426,
+        0.441159,
+        0.398686,
+        0.427711,
+        0.457284,
+        0.430936,
+        0.420091
+      ],
+      "fold_n_scored": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "fold_n_total": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "holdout_log_loss": 1.098612,
+      "holdout_accuracy": 0.441679,
+      "holdout_n_scored": 2049,
+      "holdout_n_total": 2049,
+      "holdout_best_model_log_loss_same_rows": 0.994237
+    },
+    "class_prior": {
+      "walk_forward_log_loss": 1.074231,
+      "walk_forward_accuracy": 0.434593,
+      "fold_log_loss": [
+        1.066807,
+        1.0709,
+        1.070256,
+        1.090058,
+        1.07736,
+        1.063071,
+        1.07735,
+        1.078043
+      ],
+      "fold_accuracy": [
+        0.45345,
+        0.447426,
+        0.441159,
+        0.398686,
+        0.427711,
+        0.457284,
+        0.430936,
+        0.420091
+      ],
+      "fold_n_scored": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "fold_n_total": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "holdout_log_loss": 1.071206,
+      "holdout_accuracy": 0.441679,
+      "holdout_n_scored": 2049,
+      "holdout_n_total": 2049,
+      "holdout_best_model_log_loss_same_rows": 0.994237
+    },
+    "bookmaker": {
+      "walk_forward_log_loss": 0.964697,
+      "walk_forward_accuracy": 0.539826,
+      "fold_log_loss": [
+        0.943471,
+        0.960636,
+        0.972359,
+        0.977348,
+        0.975754,
+        0.974946,
+        0.952462,
+        0.9606
+      ],
+      "fold_accuracy": [
+        0.553669,
+        0.528478,
+        0.533913,
+        0.528478,
+        0.533406,
+        0.534502,
+        0.55879,
+        0.547374
+      ],
+      "fold_n_scored": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "fold_n_total": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "holdout_log_loss": 0.976403,
+      "holdout_accuracy": 0.533919,
+      "holdout_n_scored": 2049,
+      "holdout_n_total": 2049,
+      "holdout_best_model_log_loss_same_rows": 0.994237
+    },
+    "bookmaker_shin": {
+      "walk_forward_log_loss": 0.964602,
+      "walk_forward_accuracy": 0.539826,
+      "fold_log_loss": [
+        0.943325,
+        0.960615,
+        0.972572,
+        0.977566,
+        0.976009,
+        0.974735,
+        0.951752,
+        0.960242
+      ],
+      "fold_accuracy": [
+        0.553669,
+        0.528478,
+        0.533913,
+        0.528478,
+        0.533406,
+        0.534502,
+        0.55879,
+        0.547374
+      ],
+      "fold_n_scored": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "fold_n_total": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "holdout_log_loss": 0.975942,
+      "holdout_accuracy": 0.533919,
+      "holdout_n_scored": 2049,
+      "holdout_n_total": 2049,
+      "holdout_best_model_log_loss_same_rows": 0.994237
+    },
+    "elo": {
+      "walk_forward_log_loss": 0.992271,
+      "walk_forward_accuracy": 0.523837,
+      "fold_log_loss": [
+        0.976694,
+        0.990191,
+        0.999266,
+        1.013741,
+        1.0008,
+        0.990454,
+        0.979405,
+        0.987621
+      ],
+      "fold_accuracy": [
+        0.533954,
+        0.51862,
+        0.521739,
+        0.504381,
+        0.519168,
+        0.531763,
+        0.530822,
+        0.530251
+      ],
+      "fold_n_scored": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "fold_n_total": [
+        1826,
+        1826,
+        1725,
+        1826,
+        1826,
+        1826,
+        1752,
+        1752
+      ],
+      "holdout_log_loss": 0.997835,
+      "holdout_accuracy": 0.516349,
+      "holdout_n_scored": 2049,
+      "holdout_n_total": 2049,
+      "holdout_best_model_log_loss_same_rows": 0.994237
+    }
+  },
+  "best_params": {
+    "xgboost": {
+      "max_depth": 2,
+      "learning_rate": 0.011075,
+      "n_estimators": 365,
+      "subsample": 0.839855,
+      "min_child_weight": 1.506663,
+      "reg_lambda": 0.254758
+    },
+    "lgbm": {
+      "num_leaves": 5,
+      "learning_rate": 0.022072,
+      "n_estimators": 116,
+      "subsample": 0.690456,
+      "colsample_bytree": 0.779107,
+      "min_child_samples": 66,
+      "reg_lambda": 7.008441
+    }
+  },
+  "feature_cols": [
+    "home_elo",
+    "away_elo",
+    "elo_diff",
+    "elo_expected_home",
+    "home_form_pts_pg",
+    "home_form_goals_scored_avg",
+    "home_form_goals_conceded_avg",
+    "away_form_pts_pg",
+    "away_form_goals_scored_avg",
+    "away_form_goals_conceded_avg",
+    "home_form_n",
+    "away_form_n",
+    "home_venue_form_pts_pg",
+    "away_venue_form_pts_pg",
+    "home_shots_for_avg",
+    "home_shots_against_avg",
+    "home_sot_for_avg",
+    "home_sot_against_avg",
+    "away_shots_for_avg",
+    "away_shots_against_avg",
+    "away_sot_for_avg",
+    "away_sot_against_avg",
+    "h2h_home_pts_rate",
+    "h2h_n",
+    "home_team_home_win_rate",
+    "away_team_away_win_rate",
+    "home_home_games_n",
+    "away_away_games_n",
+    "home_days_since_last",
+    "away_days_since_last",
+    "league_PL",
+    "league_PD",
+    "league_SA",
+    "league_BL1",
+    "league_FL1",
+    "league_CL",
+    "season_progress"
+  ],
+  "n_rows": 18234,
+  "n_dev_rows": 16185,
+  "n_holdout_rows": 2049,
+  "data_window": {
+    "min_date": "2016-08-12",
+    "max_date": "2026-10-12",
+    "n_rows": 18234,
+    "seasons": [
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+    ]
+  },
+  "dev_window": {
+    "min_date": "2016-08-12",
+    "max_date": "2025-05-25",
+    "n_rows": 16185,
+    "seasons": [
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024
+    ]
+  },
+  "holdout_window": {
+    "min_date": "2025-08-15",
+    "max_date": "2026-10-12",
+    "n_rows": 2049,
+    "seasons": [
+      2025,
+      2026
+    ]
+  },
+  "leagues": [
+    "BL1",
+    "FL1",
+    "PD",
+    "PL",
+    "SA"
+  ],
+  "trained_at": "2026-10-15 01:22:23",
+  "git_commit": "6172844"
 }

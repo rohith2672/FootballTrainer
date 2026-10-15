@@ -39,19 +39,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-FEATURE_COLS = [
-    "home_form_pts_pg",
-    "home_form_goals_scored_avg",
-    "home_form_goals_conceded_avg",
-    "away_form_pts_pg",
-    "away_form_goals_scored_avg",
-    "away_form_goals_conceded_avg",
-    "h2h_home_win_rate",
-    "home_team_home_win_rate",
-    "away_team_away_win_rate",
-    "home_days_since_last",
-    "away_days_since_last",
-]
+from src.features.columns import FEATURE_COLS  # noqa: F401  (single source of truth; the API imports it from here)
 from src.model import baselines as baselines_mod
 from src.model.baselines import accuracy_3, log_loss_3, score_probs
 # Re-exported for backward compatibility (pickles now live in wrappers.py).

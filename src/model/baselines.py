@@ -163,6 +163,32 @@ def bookmaker_shin(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
     return _bookmaker(eval_df, implied_shin)
 
 
+@register_baseline("elo", requires_columns=("elo_diff",))
+def elo(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
+    """Multinomial logistic regression on ``elo_diff`` alone (NaN if unavailable).
+
+    ``elo_diff`` is computed point-in-time by the feature engine, so fitting on
+    the train slice and predicting the eval slice is leakage-free.
+    """
+    out = np.full((len(eval_df), 3), np.nan)
+    if "elo_diff" not in train_df.columns or "elo_diff" not in eval_df.columns:
+        return out
+    x_tr = pd.to_numeric(train_df["elo_diff"], errors="coerce").to_numpy(dtype=float)
+    y_tr = train_df[TARGET_COL].to_numpy()
+    ok_tr = np.isfinite(x_tr)
+    if ok_tr.sum() == 0 or len(np.unique(y_tr[ok_tr])) < 2:
+        return out
+    model = LogisticRegression(max_iter=1000)
+    model.fit(x_tr[ok_tr].reshape(-1, 1) / 100.0, y_tr[ok_tr].astype(int))
+    x_ev = pd.to_numeric(eval_df["elo_diff"], errors="coerce").to_numpy(dtype=float)
+    ok_ev = np.isfinite(x_ev)
+    if ok_ev.any():
+        proba = np.full((int(ok_ev.sum()), 3), 1e-3)   # classes absent from train stay near 0
+        proba[:, model.classes_.astype(int)] = model.predict_proba(x_ev[ok_ev].reshape(-1, 1) / 100.0)
+        out[ok_ev] = proba / proba.sum(axis=1, keepdims=True)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Evaluation helpers
 # ---------------------------------------------------------------------------
