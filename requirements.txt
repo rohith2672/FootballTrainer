@@ -25,6 +25,7 @@ httpx
 # HTTP / ingestion
 requests
 responses
+tzdata  # zoneinfo database on Windows (Europe/London kickoff conversion)
 
 # Testing
 pytest

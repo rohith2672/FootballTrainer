@@ -22,6 +22,14 @@ def _make_response(status_code: int, json_body: dict, headers: dict | None = Non
     return mock
 
 
+@pytest.fixture(autouse=True)
+def _fresh_rate_limiter():
+    """Each test starts with an empty window (otherwise ~10 calls in, a test sleeps 60s)."""
+    _request_times.clear()
+    yield
+    _request_times.clear()
+
+
 MATCHES_PAYLOAD = {
     "matches": [
         {
@@ -152,3 +160,26 @@ class TestRateLimiter:
                     _wait_for_rate_limit()
 
         assert len(sleep_calls) >= 1, "Rate limiter should have slept at least once"
+
+
+# ---------------------------------------------------------------------------
+# get_upcoming_matches / status filter
+# ---------------------------------------------------------------------------
+
+class TestUpcoming:
+    def test_requests_scheduled_and_timed(self):
+        from src.ingestion.api_client import get_upcoming_matches
+
+        with patch("src.ingestion.api_client.requests.get") as mock_get:
+            mock_get.return_value = _make_response(200, MATCHES_PAYLOAD)
+            get_upcoming_matches("PL")
+
+        assert mock_get.call_args.kwargs["params"] == {"status": "SCHEDULED,TIMED"}
+        assert "/competitions/PL/matches" in mock_get.call_args.args[0]
+
+    def test_get_matches_optional_status(self):
+        with patch("src.ingestion.api_client.requests.get") as mock_get:
+            mock_get.return_value = _make_response(200, MATCHES_PAYLOAD)
+            get_matches("CL", 2024, status="FINISHED")
+
+        assert mock_get.call_args.kwargs["params"] == {"season": 2024, "status": "FINISHED"}
