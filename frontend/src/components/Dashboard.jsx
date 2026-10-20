@@ -1,23 +1,37 @@
 import { useMemo, useState } from 'react';
 import MatchCard from './MatchCard';
 import { useUpcoming } from '../hooks/useUpcoming';
+import { useFavourites } from '../hooks/useFavourites';
 import { describeError } from '../api';
 import {
   ALL_LEAGUES,
-  defaultLeague,
   filterMatches,
   formatDateHeading,
   groupByDate,
   leagueInfo,
   leaguesPresent,
   normalizeMatches,
+  pct,
   sortMatches,
 } from '../lib/matches';
+import {
+  MY_TEAMS,
+  dashboardStats,
+  favouriteFixtures,
+  leagueForPrimary,
+  matchElementId,
+  myTeamsFixtures,
+} from '../lib/dashboard';
+import { shortTeamName, teamHref } from '../lib/teams';
+import '../styles/favourites.css';
 
 const SORT_OPTIONS = [
   { value: 'kickoff', label: 'Kickoff time' },
   { value: 'confidence', label: 'Confidence (high to low)' },
 ];
+
+// Pinned "My teams" list shows this many cards; the rest are one click away.
+const PINNED_LIMIT = 4;
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -26,8 +40,140 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function Dashboard() {
+/** Scroll a card into view and move focus to it (cards with an id are focusable). */
+function jumpToCard(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  el.focus({ preventScroll: true });
+}
+
+function StatsBar({ stats, hasFavourites }) {
+  const { shown, predicted, unavailable, favouritesThisWeek, closest } = stats;
+  return (
+    <dl className="stats-bar fav-stats">
+      <div className="stat-item">
+        <dt className="stat-label">Fixtures shown</dt>
+        <dd className="stat-value accent">{shown}</dd>
+      </div>
+      <div className="stat-item">
+        <dt className="stat-label">Your teams · next 7 days</dt>
+        <dd className="stat-value">
+          {hasFavourites ? favouritesThisWeek : <span aria-label="No teams followed">—</span>}
+        </dd>
+      </div>
+      <div className="stat-item">
+        <dt className="stat-label">Closest call</dt>
+        <dd className="stat-value">
+          {closest ? (
+            <button
+              type="button"
+              className="closest-call"
+              onClick={() => jumpToCard(matchElementId(closest.key))}
+              aria-label={`${closest.home_team} versus ${closest.away_team}: most likely outcome only ${pct(closest.confidence)}. Go to fixture`}
+            >
+              <span className="closest-teams">
+                {shortTeamName(closest.home_team)} v {shortTeamName(closest.away_team)}
+              </span>
+              <span className="closest-pct">top outcome {pct(closest.confidence)}</span>
+            </button>
+          ) : (
+            <span aria-label="No predictions">—</span>
+          )}
+        </dd>
+      </div>
+      <div className="stat-item">
+        <dt className="stat-label">Predictions available</dt>
+        <dd className={`stat-value ${unavailable ? 'muted' : ''}`}>
+          {predicted}
+          <span className="stat-of"> of {shown}</span>
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+function MyTeamsSection({ teams, primary, fixtures, filtersActive, onOpenPicker, onShowAll }) {
+  const shown = fixtures.slice(0, PINNED_LIMIT);
+  const more = fixtures.length - shown.length;
+  return (
+    <section className="my-teams-section" aria-labelledby="my-teams-heading">
+      <div className="my-teams-header">
+        <div>
+          <h2 id="my-teams-heading">
+            <span aria-hidden="true">★ </span>My teams
+          </h2>
+          {teams.length ? (
+            <p className="my-teams-list">
+              Following{' '}
+              {teams.map((name, i) => (
+                <span key={name}>
+                  {i ? ', ' : ''}
+                  <a href={teamHref(name)}>{shortTeamName(name)}</a>
+                  {name === primary && teams.length > 1 ? <span className="primary-tag"> (main)</span> : null}
+                </span>
+              ))}
+            </p>
+          ) : null}
+        </div>
+        {onOpenPicker && teams.length ? (
+          <button type="button" className="btn" onClick={onOpenPicker}>
+            Edit teams
+          </button>
+        ) : null}
+      </div>
+
+      {!teams.length ? (
+        <div className="my-teams-empty">
+          <p>
+            Follow teams to pin their fixtures here and filter the news. Tap the{' '}
+            <span aria-hidden="true">☆</span>
+            <span className="sr-only">star</span> next to a team on any match card
+            {onOpenPicker ? ', or choose from the full list.' : '.'}
+          </p>
+          {onOpenPicker ? (
+            <button type="button" className="btn btn-primary" onClick={onOpenPicker}>
+              Choose teams
+            </button>
+          ) : null}
+        </div>
+      ) : fixtures.length === 0 ? (
+        <div className="my-teams-empty">
+          <p>
+            {filtersActive
+              ? 'None of your teams have fixtures matching the current team and date filters.'
+              : 'None of your teams have upcoming fixtures in the covered window.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="matches-grid">
+            {shown.map((m) => (
+              <MatchCard key={m.key} match={m} headingLevel={3} />
+            ))}
+          </div>
+          {more > 0 ? (
+            <div className="my-teams-more">
+              <button type="button" className="btn" onClick={onShowAll}>
+                Show all {plural(fixtures.length, 'fixture')} for your teams
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * `onOpenPicker` (optional): opens the team picker. Without it, "Choose teams"
+ * buttons are hidden and the empty state points at the stars on match cards.
+ */
+function Dashboard({ onOpenPicker }) {
   const { matches: rawMatches, loading, error, updatedAt, reload } = useUpcoming();
+  const { teams, primary } = useFavourites();
+  const hasFavourites = teams.length > 0;
 
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [query, setQuery] = useState('');
@@ -37,12 +183,20 @@ function Dashboard() {
 
   const matches = useMemo(() => normalizeMatches(rawMatches), [rawMatches]);
   const leagueCodes = useMemo(() => leaguesPresent(matches), [matches]);
+  const fallbackLeague = useMemo(
+    () => leagueForPrimary(matches, primary, leagueCodes),
+    [matches, primary, leagueCodes],
+  );
 
   // Derived, so a stale or missing selection falls back without an effect.
+  // With no explicit choice the primary favourite's league opens first.
   const activeLeague =
-    selectedLeague === ALL_LEAGUES || leagueCodes.includes(selectedLeague)
+    selectedLeague === ALL_LEAGUES ||
+    leagueCodes.includes(selectedLeague) ||
+    (selectedLeague === MY_TEAMS && hasFavourites)
       ? selectedLeague
-      : defaultLeague(leagueCodes);
+      : fallbackLeague;
+  const myTeamsMode = activeLeague === MY_TEAMS;
 
   const filtersActive = Boolean(query.trim() || from || to);
 
@@ -51,25 +205,27 @@ function Dashboard() {
     () => filterMatches(matches, { query, from, to }),
     [matches, query, from, to],
   );
+  const favFiltered = useMemo(() => favouriteFixtures(filtered, teams), [filtered, teams]);
   const leagueCounts = useMemo(() => {
     const counts = {};
     for (const m of filtered) counts[m.league || 'Other'] = (counts[m.league || 'Other'] ?? 0) + 1;
     return counts;
   }, [filtered]);
 
-  const visible = useMemo(
-    () =>
-      sortMatches(
-        activeLeague === ALL_LEAGUES
-          ? filtered
-          : filtered.filter((m) => (m.league || 'Other') === activeLeague),
-        sort,
-      ),
-    [filtered, activeLeague, sort],
+  const visible = useMemo(() => {
+    let list = filtered;
+    if (myTeamsMode) list = favFiltered;
+    else if (activeLeague !== ALL_LEAGUES) list = filtered.filter((m) => (m.league || 'Other') === activeLeague);
+    return sortMatches(list, sort);
+  }, [filtered, favFiltered, myTeamsMode, activeLeague, sort]);
+
+  const pinned = useMemo(
+    () => myTeamsFixtures(sortMatches(filtered, 'kickoff'), teams, primary),
+    [filtered, teams, primary],
   );
 
   const sections = useMemo(() => {
-    const codes = activeLeague === ALL_LEAGUES ? leagueCodes : [activeLeague];
+    const codes = activeLeague === ALL_LEAGUES || myTeamsMode ? leagueCodes : [activeLeague];
     return codes
       .map((code) => {
         const items = visible.filter((m) => (m.league || 'Other') === code);
@@ -81,14 +237,10 @@ function Dashboard() {
         };
       })
       .filter((s) => s.items.length > 0);
-  }, [visible, activeLeague, leagueCodes, sort]);
+  }, [visible, activeLeague, myTeamsMode, leagueCodes, sort]);
 
-  const predicted = visible.filter((m) => m.hasPrediction);
-  const unavailable = visible.length - predicted.length;
-  const avgConfidence = predicted.length
-    ? Math.round((predicted.reduce((sum, m) => sum + m.confidence, 0) / predicted.length) * 100)
-    : null;
-  const homeFavoured = predicted.filter((m) => m.outcome === 'home').length;
+  // `updatedAt` is when the fixtures were loaded: "next 7 days" counts from then.
+  const stats = useMemo(() => dashboardStats(visible, teams, updatedAt), [visible, teams, updatedAt]);
 
   const clearFilters = () => {
     setQuery('');
@@ -168,6 +320,10 @@ function Dashboard() {
     );
   }
 
+  const summary = myTeamsMode
+    ? `Showing ${plural(visible.length, 'fixture')} involving your teams`
+    : `Showing ${plural(visible.length, 'fixture')}`;
+
   return (
     <div className="dashboard-container">
       {staleBanner}
@@ -185,6 +341,20 @@ function Dashboard() {
           <span className="league-name">All leagues</span>
           <span className="match-count" aria-hidden="true">{filtered.length}</span>
         </button>
+        {hasFavourites ? (
+          <button
+            type="button"
+            id="league-MINE"
+            className={`league-pill my-teams-pill ${myTeamsMode ? 'active' : ''}`}
+            aria-pressed={myTeamsMode}
+            aria-label={`My teams, ${plural(favFiltered.length, 'fixture')}`}
+            onClick={() => setSelectedLeague(MY_TEAMS)}
+          >
+            <span className="league-emoji" aria-hidden="true">★</span>
+            <span className="league-name">My teams</span>
+            <span className="match-count" aria-hidden="true">{favFiltered.length}</span>
+          </button>
+        ) : null}
         {leagueCodes.map((code) => {
           const info = leagueInfo(code);
           const count = leagueCounts[code] ?? 0;
@@ -243,38 +413,26 @@ function Dashboard() {
 
       {refreshBar}
 
+      {/* In the My teams view the sections below already are the pinned list. */}
+      {myTeamsMode ? null : (
+        <MyTeamsSection
+          teams={teams}
+          primary={primary}
+          fixtures={pinned}
+          filtersActive={filtersActive}
+          onOpenPicker={onOpenPicker}
+          onShowAll={() => setSelectedLeague(MY_TEAMS)}
+        />
+      )}
+
       <p className="results-summary" role="status">
-        Showing {plural(visible.length, 'fixture')}
+        {summary}
         {sort === 'confidence' ? ', most confident predictions first' : ''}
       </p>
 
       {visible.length > 0 ? (
         <div className="league-content" key={activeLeague}>
-          <div className="stats-bar">
-            <div className="stat-item">
-              <div className="stat-value accent">{visible.length}</div>
-              <div className="stat-label">Fixtures</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">{avgConfidence === null ? '—' : `${avgConfidence}%`}</div>
-              <div className="stat-label">Avg Confidence</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">{predicted.length ? homeFavoured : '—'}</div>
-              <div className="stat-label">Home Favoured</div>
-            </div>
-            {unavailable > 0 ? (
-              <div className="stat-item">
-                <div className="stat-value muted">{unavailable}</div>
-                <div className="stat-label">No Prediction</div>
-              </div>
-            ) : null}
-          </div>
-          {predicted.length !== visible.length ? (
-            <p className="stats-note">
-              Confidence and home-favoured figures only include fixtures with a model prediction.
-            </p>
-          ) : null}
+          <StatsBar stats={stats} hasFavourites={hasFavourites} />
 
           {sections.map(({ code, items, groups }) => {
             const info = leagueInfo(code);
@@ -285,7 +443,10 @@ function Dashboard() {
                   <span className="league-header-icon" aria-hidden="true">{info.emoji}</span>
                   <div className="league-header-info">
                     <h2 id={headingId}>{info.name}</h2>
-                    <span>{plural(items.length, 'upcoming fixture')}</span>
+                    <span>
+                      {plural(items.length, 'upcoming fixture')}
+                      {myTeamsMode ? ' with your teams' : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -295,7 +456,7 @@ function Dashboard() {
                       <h3 className="date-heading">{formatDateHeading(group.dateKey)}</h3>
                       <div className="matches-grid">
                         {group.matches.map((m) => (
-                          <MatchCard key={m.key} match={m} headingLevel={4} />
+                          <MatchCard key={m.key} match={m} headingLevel={4} id={matchElementId(m.key)} />
                         ))}
                       </div>
                     </div>
@@ -303,13 +464,26 @@ function Dashboard() {
                 ) : (
                   <div className="matches-grid">
                     {items.map((m) => (
-                      <MatchCard key={m.key} match={m} headingLevel={3} />
+                      <MatchCard key={m.key} match={m} headingLevel={3} id={matchElementId(m.key)} />
                     ))}
                   </div>
                 )}
               </section>
             );
           })}
+        </div>
+      ) : myTeamsMode ? (
+        <div className="empty-state">
+          <div className="empty-icon" aria-hidden="true">★</div>
+          <h2>No fixtures for your teams</h2>
+          <p>
+            {filtersActive
+              ? 'None of your teams have fixtures matching the current team and date filters.'
+              : 'None of your teams have upcoming fixtures in the covered window.'}
+          </p>
+          <button type="button" className="btn btn-primary" onClick={() => setSelectedLeague(ALL_LEAGUES)}>
+            Show all leagues
+          </button>
         </div>
       ) : (
         <div className="empty-state">

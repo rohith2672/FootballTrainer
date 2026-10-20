@@ -1,0 +1,371 @@
+/* Favourite teams on the dashboard, match cards and news.
+   Reuses the tokens from index.css; compound selectors keep these rules
+   independent of stylesheet order. */
+
+/* ---- Match card: top row, team links, stars, compact figures ---- */
+.match-card .match-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.match-card .match-card-top .match-date {
+  margin-bottom: 0;
+}
+
+.match-card .fav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--text-primary);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-full);
+}
+
+.match-card.is-favourite {
+  border-color: var(--border-accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.match-card .teams {
+  margin-bottom: 0.5rem;
+}
+
+.match-card .team-link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.match-card .team-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.match-card[tabindex='-1']:focus {
+  outline: none;
+}
+
+.match-card[tabindex='-1']:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.match-card .team-tools-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.match-card .team-tools {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.match-card .team-snapshot {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.fav-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.fav-star:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-light);
+}
+
+.fav-star.on {
+  color: var(--negative-bar);
+}
+
+.fav-star[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---- Dashboard: My teams pill and pinned section ---- */
+.league-pill.my-teams-pill:not(.active) {
+  border-color: var(--border-accent);
+}
+
+.my-teams-section {
+  margin: 0 0 2rem;
+  padding: 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+}
+
+.my-teams-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.my-teams-header h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.my-teams-list {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.my-teams-list a,
+.my-teams-empty a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.my-teams-list .primary-tag {
+  color: var(--text-muted);
+}
+
+.my-teams-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.my-teams-empty p {
+  flex: 1 1 260px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.my-teams-more {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+/* ---- Stats bar ---- */
+.stats-bar.fav-stats {
+  align-items: flex-start;
+}
+
+.fav-stats .stat-item {
+  display: flex;
+  flex-direction: column-reverse; /* value above label, label first for AT */
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fav-stats .stat-label {
+  margin-top: 0.3rem;
+}
+
+.fav-stats .stat-of {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.fav-stats .closest-call {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.fav-stats .closest-call:hover {
+  border-color: var(--border-accent);
+  background: var(--accent-glow);
+}
+
+.fav-stats .closest-teams {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.fav-stats .closest-pct {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ---- News: All / My teams toggle and team tags ---- */
+.news-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+}
+
+.segmented .segment {
+  min-height: 44px;
+  min-width: 88px;
+  padding: 0 1.1rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.segmented .segment:hover:not([aria-disabled='true']) {
+  color: var(--text-primary);
+}
+
+.segmented .segment.active {
+  color: #fff;
+  background: var(--accent-vivid);
+}
+
+.segmented .segment[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.news-filter-hint {
+  flex: 1 1 240px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.link-button {
+  min-height: 24px;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.news-card.mentions-favourite {
+  border-color: var(--border-accent);
+}
+
+.news-container .team-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  list-style: none;
+}
+
+.news-container .team-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 32px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  background: var(--accent-glow);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-full);
+}
+
+.news-container .team-tag:hover {
+  border-color: var(--accent);
+}
+
+.news-empty-mine .btn {
+  margin-top: 0.25rem;
+}
+
+/* ---- Small screens ---- */
+@media (max-width: 480px) {
+  .my-teams-section {
+    padding: 1rem 0.85rem;
+  }
+
+  .stats-bar.fav-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 0.75rem;
+  }
+
+  .fav-stats .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.8px;
+    text-align: center;
+  }
+
+  .segmented .segment {
+    min-width: 0;
+    padding: 0 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fav-star,
+  .fav-stats .closest-call {
+    transition: none;
+  }
+}
