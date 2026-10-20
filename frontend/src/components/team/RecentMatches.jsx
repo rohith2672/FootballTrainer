@@ -69,8 +69,12 @@ function MatchRow({ row }) {
   );
 }
 
-/** Newest-first match list with a venue filter and "show more". */
-function RecentMatches({ matches, error, venue, onVenueChange, limit, onShowMore, loading, onRetry }) {
+/**
+ * Newest-first match list with a venue filter and "show more". `stale`: the
+ * rows are from another venue/limit (still loading, or that request failed);
+ * they stay visible but dimmed.
+ */
+function RecentMatches({ matches, error, venue, onVenueChange, limit, onShowMore, loading, stale = false, onRetry }) {
   const rows = Array.isArray(matches) ? matches : null;
   const venueText = venue === 'all' ? '' : ` ${venue}`;
   const noun = venue === 'all' ? 'match' : `${venue} match`;
@@ -120,7 +124,7 @@ function RecentMatches({ matches, error, venue, onVenueChange, limit, onShowMore
           busy={loading}
         />
       ) : null}
-      <div className={loading && rows ? 'is-stale' : undefined}>{body}</div>
+      <div className={stale && rows ? 'is-stale' : undefined}>{body}</div>
     </Card>
   );
 }

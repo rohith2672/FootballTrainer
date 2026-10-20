@@ -116,6 +116,9 @@ export function fixtureSides(fixture, team) {
 
 const daysText = (n) => plural(n, 'day');
 
+/** Upper bound of `details.*.days_since_last` from the model's feature engine. */
+export const REST_CAP = 30;
+
 /**
  * Rest-day comparison before the fixture, e.g.
  * "Arsenal FC: 4 days since their last match; Chelsea FC: 7 days (3 days less rest)."
@@ -126,12 +129,17 @@ export function restGapText(sides, team) {
   const own = isNum(sides.own.days_since_last) ? Math.round(sides.own.days_since_last) : null;
   const opp = isNum(sides.opp.days_since_last) ? Math.round(sides.opp.days_since_last) : null;
   if (own === null && opp === null) return null;
-  const ownText = own === null ? 'rest unknown' : `${daysText(own)} since their last match`;
-  const oppText = opp === null ? 'rest unknown' : daysText(opp);
+  // The model engine caps days_since_last at REST_CAP: a capped value means "at least".
+  const ownCapped = own !== null && own >= REST_CAP;
+  const oppCapped = opp !== null && opp >= REST_CAP;
+  const days = (n, capped) => (capped ? `${REST_CAP}+ days` : daysText(n));
+  const ownText = own === null ? 'rest unknown' : `${days(own, ownCapped)} since their last match`;
+  const oppText = opp === null ? 'rest unknown' : days(opp, oppCapped);
   let gap = '';
-  if (own !== null && opp !== null) {
-    const diff = own - opp;
-    gap = diff === 0 ? ' (equal rest)' : ` (${daysText(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} rest)`;
+  if (own !== null && opp !== null && !(ownCapped && oppCapped)) {
+    const diff = Math.min(own, REST_CAP) - Math.min(opp, REST_CAP);
+    const atLeast = ownCapped || oppCapped ? 'at least ' : '';
+    gap = diff === 0 ? ' (equal rest)' : ` (${atLeast}${daysText(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} rest)`;
   }
   return `${team}: ${ownText}; ${sides.opponent}: ${oppText}${gap}.`;
 }
@@ -306,5 +314,72 @@ export function teamModelSummary(record) {
     uniform,
     verdict,
     smallSample: nSettled > 0 && nSettled < 20,
+  };
+}
+
+// ---- Team page request state (used by hooks/useTeam) ------------------------
+// The profile + Elo history ("core") and the match list are fetched
+// separately: venue / limit changes refetch only the match list.
+
+export const EMPTY_CORE = Object.freeze({
+  key: null, teamKey: null, profile: null, eloHistory: null, eloError: null, error: null, errorKey: null,
+});
+export const EMPTY_LIST = Object.freeze({ key: null, teamKey: null, rows: null, error: null, errorKey: null });
+
+/** Core state after the profile loaded (Elo may have failed: keep the last Elo for the same team). */
+export function coreLoaded(prev, { key, teamKey, profile, eloHistory, eloError }) {
+  const sameTeam = prev?.teamKey === teamKey;
+  return {
+    key,
+    teamKey,
+    profile,
+    eloHistory: eloError ? (sameTeam ? prev.eloHistory : null) : eloHistory ?? null,
+    eloError: eloError ?? null,
+    error: null,
+    errorKey: null,
+  };
+}
+
+/** Core state after the profile request failed: earlier data for the same team stays. */
+export function coreFailed(prev, { key, teamKey, error }) {
+  if (prev?.teamKey === teamKey) return { ...prev, error, errorKey: key };
+  return { ...EMPTY_CORE, teamKey: null, error, errorKey: key };
+}
+
+/** Match list after a successful request. */
+export const listLoaded = (prev, { key, teamKey, rows }) => ({ key, teamKey, rows, error: null, errorKey: null });
+
+/** Match list after a failed request: the last rows for the same team stay visible. */
+export function listFailed(prev, { key, teamKey, error }) {
+  if (prev?.teamKey === teamKey) return { ...prev, error, errorKey: key };
+  return { ...EMPTY_LIST, teamKey, error, errorKey: key };
+}
+
+/**
+ * What the team page shows for the current keys.
+ * - `data` is null until the profile for this team arrived (never another team's).
+ * - `matches` are the last rows loaded for this team, possibly for another
+ *   venue/limit; then `stale` is true (loading or failed), so callers dim them.
+ * - `error` is the profile failure for the current request (page level);
+ *   `partialErrors` are section failures for the current request.
+ */
+export function teamView(core, list, { coreKey, matchesKey, teamKey }) {
+  const coreSameTeam = core?.teamKey === teamKey;
+  const coreError = core?.errorKey === coreKey ? core.error : null;
+  const profileLoading = core?.key !== coreKey && !coreError;
+  const rows = list?.teamKey === teamKey ? list.rows : null;
+  const listError = list?.errorKey === matchesKey ? list.error : null;
+  const listCurrent = list?.key === matchesKey;
+  const matchesLoading = !listCurrent && !listError;
+  return {
+    data: coreSameTeam && core.profile
+      ? { profile: core.profile, matches: rows ?? null, eloHistory: core.eloHistory ?? null }
+      : null,
+    partialErrors: { matches: listError, eloHistory: coreSameTeam ? core.eloError ?? null : null },
+    error: coreError,
+    profileLoading,
+    matchesLoading,
+    loading: profileLoading || matchesLoading,
+    stale: rows !== null && !listCurrent,
   };
 }

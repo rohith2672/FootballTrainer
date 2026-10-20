@@ -1,123 +1,107 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getEloHistory, getTeam, getTeamMatches } from '../api';
+import {
+  EMPTY_CORE,
+  EMPTY_LIST,
+  coreFailed,
+  coreLoaded,
+  listFailed,
+  listLoaded,
+  teamView,
+} from '../lib/teamPage.js';
 
-const settledValue = (result) => (result.status === 'fulfilled' ? result.value : null);
-const settledError = (result) => (result.status === 'rejected' ? result.reason : null);
 const isAbort = (err) => err?.name === 'AbortError';
 
-/** Profile is required (its error rejects); matches/Elo failures are partial. */
-async function fetchTeamBundle(team, { asOf, limit, venue, since }, signal) {
-  const [profile, matches, eloHistory] = await Promise.allSettled([
-    getTeam(team, { asOf: asOf ?? undefined, signal }),
-    getTeamMatches(team, { limit, venue, signal }),
-    getEloHistory(team, { since: since ?? undefined, signal }),
-  ]);
-  if (profile.status === 'rejected') throw profile.reason;
-  const partial = (result) => {
-    const err = settledError(result);
-    return err && !isAbort(err) ? err : null;
-  };
-  return {
-    data: {
-      profile: profile.value,
-      matches: settledValue(matches),
-      eloHistory: settledValue(eloHistory),
-    },
-    partialErrors: { matches: partial(matches), eloHistory: partial(eloHistory) },
-  };
-}
+const IDLE = {
+  data: null,
+  partialErrors: { matches: null, eloHistory: null },
+  loading: false,
+  profileLoading: false,
+  matchesLoading: false,
+  error: null,
+  stale: false,
+};
 
 /**
- * Team page data: profile, recent matches and Elo history fetched in parallel.
+ * Team page data.
  *
  * `useTeam(name, { asOf, limit = 20, venue = 'all', since })` returns
  *   {
  *     data: { profile, matches, eloHistory } | null,
- *     loading, error,          // error = the profile request failed (page-level)
+ *     loading, profileLoading, matchesLoading,
+ *     error,                   // the profile request failed (page level)
  *     partialErrors: { matches, eloHistory },  // per-section failures (or null)
- *     stale,                   // data is from the same team but other options
+ *     stale,                   // `matches` are from another venue/limit (loading or failed)
  *     refetch,
  *   }
  *
- * Data belongs to the query that produced it: another team's data is never
- * returned. When only `venue`/`limit`/`since` change for the same team the
- * previous data stays visible (`stale: true`, `loading: true`) until the new
- * response arrives. A null/blank `name` is idle: no request, everything null.
+ * The profile and Elo history are keyed by team (+ asOf / since); the match
+ * list by team + venue + limit, so changing the venue or limit refetches only
+ * `/teams/{name}/matches`. Another team's data is never returned. When a
+ * request fails, the last data for the same team stays visible. A null/blank
+ * `name` is idle: no request, everything null.
  */
 export function useTeam(name, { asOf = null, limit = 20, venue = 'all', since = null } = {}) {
   const team = typeof name === 'string' ? name.trim() : '';
+  // Bumped by refetch() so both requests run again with new keys.
+  const [nonce, setNonce] = useState(0);
   const teamKey = `${team}|${asOf ?? ''}`;
-  const key = `${teamKey}|${limit}|${venue}|${since ?? ''}`;
+  const coreKey = `${teamKey}|${since ?? ''}|${nonce}`;
+  const matchesKey = `${teamKey}|${venue}|${limit}|${nonce}`;
 
-  const [state, setState] = useState({
-    data: null,
-    partialErrors: { matches: null, eloHistory: null },
-    dataKey: null,
-    dataTeamKey: null,
-    loading: false,
-    error: null,
-    errorKey: null,
-  });
-  const controllerRef = useRef(null);
+  const [core, setCore] = useState(EMPTY_CORE);
+  const [list, setList] = useState(EMPTY_LIST);
 
-  const load = useCallback(async () => {
-    controllerRef.current?.abort();
-    if (!team) return;
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
-    // No synchronous setState here (this runs inside an effect): a new query
-    // is "loading" because its key differs from dataKey; refetch() sets the
-    // flag explicitly for a reload of the same query.
-    try {
-      const bundle = await fetchTeamBundle(team, { asOf, limit, venue, since }, controller.signal);
-      if (controller.signal.aborted) return;
-      setState({
-        data: bundle.data,
-        partialErrors: bundle.partialErrors,
-        dataKey: key,
-        dataTeamKey: teamKey,
-        loading: false,
-        error: null,
-        errorKey: null,
-      });
-    } catch (err) {
-      if (isAbort(err) || controller.signal.aborted) return;
-      setState((s) => ({ ...s, loading: false, error: err, errorKey: key }));
-    }
-  }, [team, asOf, limit, venue, since, key, teamKey]);
-
+  // Profile + Elo history. State is only set when a response arrives; until
+  // then "loading" is derived from the key mismatch.
   useEffect(() => {
-    load();
-    return () => controllerRef.current?.abort();
-  }, [load]);
+    if (!team) return undefined;
+    const controller = new AbortController();
+    const { signal } = controller;
+    Promise.allSettled([
+      getTeam(team, { asOf: asOf ?? undefined, signal }),
+      getEloHistory(team, { since: since ?? undefined, signal }),
+    ]).then(([profile, elo]) => {
+      if (signal.aborted) return;
+      if (profile.status === 'rejected') {
+        if (!isAbort(profile.reason)) setCore((s) => coreFailed(s, { key: coreKey, teamKey, error: profile.reason }));
+        return;
+      }
+      const eloError = elo.status === 'rejected' && !isAbort(elo.reason) ? elo.reason : null;
+      setCore((s) =>
+        coreLoaded(s, {
+          key: coreKey,
+          teamKey,
+          profile: profile.value,
+          eloHistory: elo.status === 'fulfilled' ? elo.value : null,
+          eloError,
+        }),
+      );
+    });
+    return () => controller.abort();
+  }, [team, asOf, since, coreKey, teamKey]);
+
+  // Match list.
+  useEffect(() => {
+    if (!team) return undefined;
+    const controller = new AbortController();
+    const { signal } = controller;
+    getTeamMatches(team, { limit, venue, signal }).then(
+      (rows) => {
+        if (!signal.aborted) setList((s) => listLoaded(s, { key: matchesKey, teamKey, rows }));
+      },
+      (error) => {
+        if (signal.aborted || isAbort(error)) return;
+        setList((s) => listFailed(s, { key: matchesKey, teamKey, error }));
+      },
+    );
+    return () => controller.abort();
+  }, [team, limit, venue, matchesKey, teamKey]);
 
   const refetch = useCallback(() => {
-    if (!team) return;
-    setState((s) => ({ ...s, loading: true, error: null, errorKey: null }));
-    load();
-  }, [team, load]);
+    if (team) setNonce((n) => n + 1);
+  }, [team]);
 
-  if (!team) {
-    return {
-      data: null,
-      partialErrors: { matches: null, eloHistory: null },
-      loading: false,
-      error: null,
-      stale: false,
-      refetch,
-    };
-  }
-
-  const sameTeam = state.dataTeamKey === teamKey;
-  const current = state.dataKey === key;
-  const error = state.errorKey === key ? state.error : null;
-  return {
-    data: sameTeam ? state.data : null,
-    partialErrors: sameTeam ? state.partialErrors : { matches: null, eloHistory: null },
-    loading: !error && (state.loading || !current),
-    error,
-    stale: sameTeam && !current,
-    refetch,
-  };
+  if (!team) return { ...IDLE, refetch };
+  return { ...teamView(core, list, { coreKey, matchesKey, teamKey }), refetch };
 }

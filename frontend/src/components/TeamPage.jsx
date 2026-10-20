@@ -72,7 +72,10 @@ function TeamPage({ name, onOpenPicker }) {
   const [venue, setVenue] = useState('all');
   const [limit, setLimit] = useState(MATCH_LIMITS.initial);
   const favourites = useFavourites();
-  const { data, loading, error, partialErrors, stale, refetch } = useTeam(name, { venue, limit });
+  const { data, loading, profileLoading, matchesLoading, error, partialErrors, stale, refetch } = useTeam(name, {
+    venue,
+    limit,
+  });
 
   if (!data && error) {
     return (
@@ -82,7 +85,6 @@ function TeamPage({ name, onOpenPicker }) {
   if (!data) return <PageSkeleton name={name} />;
 
   const { profile, matches, eloHistory } = data;
-  const busy = loading && stale;
 
   return (
     <div className="team-page">
@@ -107,7 +109,7 @@ function TeamPage({ name, onOpenPicker }) {
           eloHistory={eloHistory}
           error={partialErrors.eloHistory}
           onRetry={refetch}
-          busy={loading}
+          busy={profileLoading}
         />
         <SeasonCard season={profile.season} league={profile.league} />
         <AveragesCard averages={profile.averages} />
@@ -118,7 +120,8 @@ function TeamPage({ name, onOpenPicker }) {
           onVenueChange={setVenue}
           limit={limit}
           onShowMore={() => setLimit(MATCH_LIMITS.more)}
-          loading={busy}
+          loading={matchesLoading}
+          stale={stale}
           onRetry={refetch}
         />
         <ModelOnTeam name={profile.name} />

@@ -149,6 +149,10 @@ export function createFavouritesStore({ storage = null, key = FAVOURITES_KEY, ta
   };
 
   const onStorage = (event) => {
+    // Only events for our storage area: sessionStorage.clear() in another tab
+    // also fires a key=null storage event, which must not wipe favourites.
+    const area = event?.storageArea;
+    if (area && area !== resolveStorage(storage)) return;
     if (event && event.key !== null && event.key !== undefined && event.key !== key) return;
     // A null key means another tab cleared all storage.
     const next = event?.key === null ? EMPTY_FAVOURITES : readStorage(storage, key);

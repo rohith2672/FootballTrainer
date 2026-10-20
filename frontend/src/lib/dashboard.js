@@ -88,18 +88,23 @@ export function isWithinWeek(match, now) {
 }
 
 /**
- * Figures for the stats bar over the fixtures currently shown.
- * `favouritesThisWeek` is null when there are no favourites (nothing to count).
+ * Figures for the stats bar. `shown`, `predicted`, `unavailable` and
+ * `closest` describe the fixtures currently shown (`matches`);
+ * `favouritesThisWeek` counts favourite fixtures in [now, now + 7 days) across
+ * `allMatches` (every loaded fixture, ignoring the league tab and filters;
+ * defaults to `matches`). It is null when there are no favourites.
+ * `now` should be the current time, not when the data was loaded.
  */
-export function dashboardStats(matches, teams, now) {
+export function dashboardStats(matches, teams, now, allMatches = matches) {
   const list = Array.isArray(matches) ? matches : [];
+  const all = Array.isArray(allMatches) ? allMatches : list;
   const predicted = list.filter((m) => m?.hasPrediction).length;
   return {
     shown: list.length,
     predicted,
     unavailable: list.length - predicted,
     favouritesThisWeek: teams?.length
-      ? favouriteFixtures(list, teams).filter((m) => isWithinWeek(m, now)).length
+      ? favouriteFixtures(all, teams).filter((m) => isWithinWeek(m, now)).length
       : null,
     closest: closestCall(list),
   };

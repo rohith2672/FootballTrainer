@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import {
   lineGeometry,
   nearestIndex,
@@ -17,12 +17,13 @@ const TIP_W = 220;
 const TIP_H = 56; // estimate, only used to decide whether the tooltip fits above
 const NAV_KEYS = ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
 
-/** Width of an element, kept current with ResizeObserver. */
+/**
+ * Width of an element, kept current with ResizeObserver. A callback ref, so
+ * an element that mounts later (e.g. after data arrives) is still observed.
+ */
 function useElementWidth() {
-  const ref = useRef(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  useEffect(() => {
-    const el = ref.current;
+  const ref = useCallback((el) => {
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(([entry]) => {
       setWidth(Math.max(MIN_WIDTH, Math.floor(entry.contentRect.width)));

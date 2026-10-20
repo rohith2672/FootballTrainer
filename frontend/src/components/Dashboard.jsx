@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MatchCard from './MatchCard';
 import LeagueBadge from './icons/LeagueBadge';
 import { AlertIcon, GlobeIcon, InboxIcon, SearchIcon, StarIcon } from './icons';
@@ -62,7 +62,7 @@ function StatsBar({ stats, hasFavourites }) {
         <dd className="stat-value accent">{shown}</dd>
       </div>
       <div className="stat-item">
-        <dt className="stat-label">Your teams · next 7 days</dt>
+        <dt className="stat-label">Your teams · next 7 days · all leagues</dt>
         <dd className="stat-value">
           {hasFavourites ? favouritesThisWeek : <span aria-label="No teams followed">—</span>}
         </dd>
@@ -258,8 +258,17 @@ function Dashboard({ routeHash = '', onOpenPicker }) {
       .filter((s) => s.items.length > 0);
   }, [visible, activeLeague, myTeamsMode, leagueCodes, sort]);
 
-  // `updatedAt` is when the fixtures were loaded: "next 7 days" counts from then.
-  const stats = useMemo(() => dashboardStats(visible, teams, updatedAt), [visible, teams, updatedAt]);
+  // "Your teams · next 7 days" counts every loaded fixture (not just this tab
+  // or search) from the current time; `now` ticks each minute.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const stats = useMemo(
+    () => dashboardStats(visible, teams, Math.max(now, updatedAt?.getTime() ?? 0), matches),
+    [visible, teams, now, updatedAt, matches],
+  );
 
   const clearFilters = () => update({ q: '', from: '', to: '' });
 
