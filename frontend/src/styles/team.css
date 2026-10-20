@@ -975,7 +975,7 @@
 /* ============================================================
    WIDER SCREENS
    ============================================================ */
-@media (min-width: 481px) {
+@media (width > 480px) {
   .avg-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -996,7 +996,7 @@
   }
 }
 
-@media (min-width: 769px) {
+@media (width > 768px) {
   .team-card,
   .team-header {
     padding: 1.4rem 1.5rem;

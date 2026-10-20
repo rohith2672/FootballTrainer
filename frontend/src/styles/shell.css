@@ -172,7 +172,7 @@
 
 /* Medium widths: the tabs get their own centred row under brand + toggle
    (the zero-height ::after forces the line break). */
-@media (min-width: 641px) and (max-width: 1100px) {
+@media (width > 640px) and (width <= 1100px) {
   .topbar::after {
     content: '';
     order: 2;
