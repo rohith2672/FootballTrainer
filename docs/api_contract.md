@@ -59,7 +59,7 @@ Response: `Fixture[]`. Each item:
   "reason": null,
   "model_version": "logistic_regression@a1b2c3d 2026-10-20",
   "top_factors": [
-    {"feature": "elo_diff", "label": "Elo rating gap", "value": 112.4, "contribution": 0.21}
+    {"feature": "elo_diff", "label": "Elo rating gap (incl. home advantage)", "value": 112.4, "contribution": 0.21}
   ],
   "details": {
     "home": {"elo": 1712.3, "form_pts_pg": 2.2, "goals_for_avg": 2.0, "goals_against_avg": 0.8,
@@ -154,9 +154,12 @@ and no fixture API key (except `next_fixture`, see below). Common rules:
   season start year. Elo values are rounded to 1 decimal, rates/averages to 3.
 - **Elo** is computed by replaying `src/features/elo.py` over full history
   exactly as the feature engine does (all competitions incl. CL share one
-  rating; K=20, home advantage 60, goal-difference multiplier, 25% regression to
-  the league mean at a team's first match of a new season, results applied
-  per day). Ratings are therefore identical to those the model sees.
+  rating; K=14, uncapped goal-difference multiplier `1 + ln(1 + |gd|)`, 5%
+  regression to the league mean at a team's first match of a new season,
+  results applied per day). Home advantage is learned online per competition:
+  each starts at 60 rating points and after every result moves by
+  4 × (actual − expected home score) (`HOME_ADVANTAGE_RATE`). Ratings are
+  therefore identical to those the model sees.
   Consequences: a team's first-match-of-season `elo_before` differs from the
   previous match's `elo_after` (season regression); the profile's
   `elo.rating` is the post-last-match value and can differ from `/upcoming`
