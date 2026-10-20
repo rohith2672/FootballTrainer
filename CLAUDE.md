@@ -1,5 +1,21 @@
 # Football Match Outcome Predictor — Claude Code Context
 
+## Newer context: hourly news (2026-10-16)
+
+Work is on the user-requested `codex` branch from `dev` at `888dc66`, in
+`C:/Users/rohit/OneDrive/Desktop/projects/FootballTrainer`. News changes are
+uncommitted. Read `MEMORY.md` for the current handoff; older sections below are
+historical. The user withdrew the previously supplied AGENTS.md instructions.
+
+Added an hourly BBC Sport RSS worker, PostgreSQL headline cache/migration 0004,
+model-independent `/news` API, and dashboard News tab. Fixed PostgreSQL driver
+selection and isolated the old DB tests. Verified 370 pytest tests, 9 frontend
+tests, lint/build, real migrations/locking, live feed ingestion and mobile/desktop
+browser states. Temporary test services have been stopped. Continuous operation
+requires `.env` configuration and running the Compose news worker. ML experiments
+listed in the agreed plan remain follow-ups; the news feature does not alter the
+model. Preserve `TEST_REPORT_2026-10-15.md`.
+
 ## Current session context (2026-09-28)
 
 Read [MEMORY.md](MEMORY.md) first for the current handoff and

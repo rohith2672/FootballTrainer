@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.api import model_store, serving, store
 from src.api import track_record as tr
+from src.api.news import router as news_router
 from src.database import DatabaseNotConfigured, get_db
 from src.features.columns import LEAGUES
 from src.ingestion import api_client
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Football Match Predictor", version=API_VERSION, lifespan=lifespan)
+app.include_router(news_router)
 
 
 def cors_origins() -> List[str]:

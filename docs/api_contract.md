@@ -1,5 +1,39 @@
 # API contract (v2) — `/upcoming`, `/track-record`, `/health`
 
+## `GET /news` (added 2026-10-16)
+
+Read-only cache endpoint, independent of the prediction model and fixture API
+key. Query `limit` defaults to 50, with bounds 1–100 (invalid values return 422).
+Articles are newest first, undated entries last. This request never fetches the
+publisher feed; a separate worker checks hourly.
+
+```json
+{
+  "articles": [
+    {"id": "stable-source-id-hash", "title": "Football headline",
+     "url": "https://www.bbc.com/sport/football/articles/example",
+     "publisher": "BBC Sport", "published_at": "2026-10-16T10:00:00Z",
+     "fetched_at": "2026-10-16T10:30:00Z"}
+  ],
+  "last_attempt_at": "2026-10-16T10:30:00Z",
+  "last_success_at": "2026-10-16T10:30:00Z",
+  "next_check_at": "2026-10-16T11:30:00Z",
+  "status": "ok",
+  "stale": false
+}
+```
+
+- Timestamps are UTC ISO 8601 strings; publication/check times can be null
+  when not known. `fetched_at` includes successful conditional revalidation.
+- `status` is `ok` after a successful check within 90 minutes, `stale` after
+  90 minutes, and `unavailable` if never successfully checked or expired at
+  24 hours. `stale` is true for either non-ok state.
+- A successfully fetched empty feed returns `articles: []`, `status: "ok"`.
+  Expired cache returns no articles. An HTTP 304 advances successful-check time.
+- A missing/unreachable database returns 503 with `detail: "News storage unavailable"`.
+- Only headline metadata and links are returned. Provider failures preserve
+  the unexpired snapshot; the UI must not retain an expired snapshot on errors.
+
 This is the shared contract between the FastAPI backend (`src/api/main.py`) and the
 React frontend. Everything is backward compatible with v1: the existing flat
 probability fields remain.

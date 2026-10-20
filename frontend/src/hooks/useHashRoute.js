@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 export const ROUTES = {
   upcoming: '#/',
   trackRecord: '#/track-record',
+  news: '#/news',
 };
 
 function subscribe(callback) {
@@ -16,5 +17,6 @@ const getServerSnapshot = () => '';
 /** Current view derived from location.hash; anything unknown is "upcoming". */
 export function useHashRoute() {
   const hash = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return hash.replace(/\/+$/, '') === ROUTES.trackRecord ? 'trackRecord' : 'upcoming';
+  const normalized = hash.replace(/\/+$/, '');
+  return Object.keys(ROUTES).find((key) => ROUTES[key] === normalized) ?? 'upcoming';
 }

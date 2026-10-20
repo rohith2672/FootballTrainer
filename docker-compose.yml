@@ -56,6 +56,19 @@ services:
     depends_on:
       - app
 
+  news-worker:
+    build: .
+    command: ["python", "-m", "src.news.worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-football_predictor}
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+
 volumes:
   pgdata:
   mlflow_data:

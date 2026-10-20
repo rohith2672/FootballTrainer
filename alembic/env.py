@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from src.db_url import sqlalchemy_url
 
 load_dotenv()
 
@@ -14,7 +15,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Override sqlalchemy.url from environment so no credentials live in alembic.ini
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+config.set_main_option("sqlalchemy.url", sqlalchemy_url(os.environ["DATABASE_URL"]).replace("%", "%%"))
 
 from src.models import Base  # noqa: E402 — must come after env load
 

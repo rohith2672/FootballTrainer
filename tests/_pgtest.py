@@ -15,6 +15,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from src.models import Base
+from src.db_url import sqlalchemy_url
 
 
 @pytest.fixture
@@ -23,8 +24,9 @@ def db_session():
     if not url:
         pytest.skip("TEST_DATABASE_URL not set - skipping PostgreSQL integration tests")
 
+    url = sqlalchemy_url(url)
     schema = f"t_{uuid.uuid4().hex[:12]}"
-    admin = create_engine(url)
+    admin = create_engine(url, connect_args={"connect_timeout": 5})
     try:
         with admin.begin() as conn:
             conn.execute(text(f'CREATE SCHEMA "{schema}"'))
@@ -32,7 +34,7 @@ def db_session():
         admin.dispose()
         pytest.skip("TEST_DATABASE_URL is not reachable")
 
-    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}", "connect_timeout": 5})
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
     try:

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Dashboard from './components/Dashboard'
 import TrackRecord from './components/TrackRecord'
+import News from './components/News'
 import { ROUTES, useHashRoute } from './hooks/useHashRoute'
 
 const VIEWS = {
@@ -13,6 +14,11 @@ const VIEWS = {
     badge: 'Track record',
     title: 'Track record',
     blurb: 'How the model’s saved pre-match predictions have scored against results and bookmaker odds',
+  },
+  news: {
+    badge: 'Football news',
+    title: 'News',
+    blurb: 'The latest football headlines, checked every hour',
   },
 }
 
@@ -61,6 +67,7 @@ function App() {
           <Dashboard />
         </div>
         {route === 'trackRecord' ? <TrackRecord /> : null}
+        {route === 'news' ? <News /> : null}
       </main>
     </div>
   )

@@ -1,6 +1,51 @@
 # FootballTrainer session handoff
 
-Last updated: 2026-10-15. Local `dev` has tickets 018-022 committed (5 commits on
+Last updated: 2026-10-16.
+
+## Current handoff: hourly news on `codex`
+
+- Actual repository: `C:/Users/rohit/OneDrive/Desktop/projects/FootballTrainer`.
+  The saved Codex project path without `projects/` is obsolete.
+- Created the user-requested branch `codex` from `dev` at `888dc66`.
+  News implementation and documentation are uncommitted; no push requested.
+  Preserve the pre-existing untracked `TEST_REPORT_2026-10-15.md`.
+- Three subagents implemented backend/frontend and independently verified news.
+  Added BBC Sport football RSS metadata ingestion, migration `0004`, `/news`,
+  and a separate Compose `news-worker`. Hourly checks persist their schedule and
+  use a PostgreSQL session advisory lock held across commits. Retries are bounded;
+  ETag/Last-Modified conditional requests are supported when supplied upstream.
+- The News tab (`#/news`) shows safe attributed headline links, publication age,
+  attempt/success timestamps and stale/unavailable/empty states. It reads cache
+  every five minutes while visible and on manual refresh. Local and server cache
+  expires at 24 hours; source staleness begins after 90 minutes. No article bodies,
+  model features, team matching, or paid news integration were added.
+- Fixed default PostgreSQL URL driver selection for SQLAlchemy via
+  `src/db_url.py`, used by application, migrations and isolated PG tests.
+  Existing `tests/test_db.py` now uses isolated test schemas rather than app DB.
+- Verification actually run: full pytest **370 passed**, including real isolated
+  PostgreSQL tests (no skips). Frontend **9 Node tests passed**, lint/build passed.
+  Chrome smoke at 375px and 1100px checked keyboard refresh, states, navigation,
+  overflow and console errors. Root inspected the mobile screenshot.
+- Real migrations tested on a disposable PostgreSQL 18 cluster:
+  base -> 0004 -> 0003 -> 0004, including final provider ID column. Cross-connection
+  locks, persisted scheduling, duplicates, 304, failed refresh and expiry tested.
+- Ran the actual worker against that isolated database with no browser open:
+  76 live BBC headlines fetched. Integrated FastAPI `/news?limit=50` returned
+  50 articles and `ok` with the model deliberately unavailable; invalid limit 101
+  returned 422. No real model artifacts, application DB or user PG service changed.
+- Temporary worker, Vite preview, browser, and isolated PG cluster are stopped.
+  Temporary PG files/logs remain under TEMP; this is not a running deployment.
+- Compose config validated with `--env-file .env.example --no-env-resolution`.
+  Docker images/full stack not run (Docker daemon not active; `.env` missing).
+  Configure `.env` then use the README startup command for continuous operation.
+- Prediction improvements remain separately evaluated follow-ups: PL slice metrics
+  and matched-row bookmaker comparisons, PL-specialist experiment, richer form /
+  shot freshness, football parameter tuning, and a match preparation page.
+  This news task makes no claim of improved prediction accuracy.
+
+## Previous handoff (2026-10-15; historical context)
+
+Local `dev` had tickets 018-022 committed (5 commits on
 top of `6172844`; not pushed). Recheck Git and source on resume.
 
 ## Resume here

@@ -1,5 +1,50 @@
 # Football Match Outcome Predictor
 
+## Hourly football news (2026-10-16)
+
+The **News** dashboard tab shows BBC Sport football headline links, publication
+times, and server refresh status. The worker checks the feed every hour even
+when the browser is closed. The page reads cached headlines every five minutes
+while visible; its Refresh button also reads the cache. New stories depend on
+publisher activity. The computer/server and worker must remain running.
+
+If `.env` is missing, copy `.env.example` to `.env` and configure your database
+settings privately. With `.env` configured, run:
+
+```sh
+docker compose up --build -d db app news-worker frontend
+```
+
+The app applies migrations, including the additive `0004` news tables. The news
+worker retries while the database schema starts up. No news API key is needed;
+the football-data.org key and trained model are needed for predictions, not news.
+For local development with PostgreSQL and the project environment active:
+
+```sh
+python -m pip install -r requirements.txt
+python -m alembic upgrade head
+python -m src.news.worker
+```
+
+Run `python -m uvicorn src.api.main:app --reload` and the frontend in separate
+terminals. `GET /news?limit=50` returns cached headline metadata and source check
+times. News is marked delayed after 90 minutes without a successful check;
+cached headlines expire after 24 hours. An empty successful feed is distinguished
+from an unavailable source. Browser refresh times are not source freshness.
+
+This personal-use feature links to the publisher; it stores no article bodies
+and supplies no news-derived ML features. The current implementation uses the
+[BBC football RSS feed](https://feeds.bbci.co.uk/sport/football/rss.xml), following
+[BBC RSS guidance](https://www.bbc.co.uk/sport/articles/cqllxj2n4kyo).
+
+For tests, use `TEST_DATABASE_URL` pointing to a disposable PostgreSQL database.
+Database tests create isolated schemas and never use the application database.
+Both ordinary `postgresql://` URLs and explicit `postgresql+psycopg2://` URLs
+select the installed psycopg2 driver for application and migration connections.
+
+The sections below include historical setup/model descriptions. See `MEMORY.md`
+and `docs/api_contract.md` for the current model and API context.
+
 An end-to-end ML pipeline that predicts Premier League match outcomes (Home Win / Draw / Away Win) using historical match data, feature engineering, and an XGBoost classifier served via FastAPI.
 
 ## Architecture

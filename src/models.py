@@ -97,3 +97,35 @@ class Prediction(Base):
     away_win = Column(Float, nullable=False)
     created_at = Column(DateTime, nullable=False)
     updated_at = Column(DateTime, nullable=False)
+
+
+class NewsArticle(Base):
+    """Short-lived publisher headline cache; never used as model features."""
+
+    __tablename__ = "news_articles"
+    __table_args__ = (
+        UniqueConstraint("source", "url", name="uq_news_source_url"),
+        Index("ix_news_published_at", "published_at"),
+    )
+
+    id = Column(String(64), primary_key=True)
+    source = Column(String(40), nullable=False)
+    provider_id = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    url = Column(String, nullable=False)
+    publisher = Column(String(80), nullable=False)
+    published_at = Column(DateTime, nullable=True)
+    fetched_at = Column(DateTime, nullable=False)
+
+
+class NewsFeedState(Base):
+    """Refresh metadata persists even when a successful feed contains no items."""
+
+    __tablename__ = "news_feed_states"
+
+    source = Column(String(40), primary_key=True)
+    etag = Column(String, nullable=True)
+    last_modified = Column(String, nullable=True)
+    last_attempt_at = Column(DateTime, nullable=True)
+    last_success_at = Column(DateTime, nullable=True)
+    next_check_at = Column(DateTime, nullable=True)

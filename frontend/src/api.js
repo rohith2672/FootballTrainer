@@ -3,8 +3,10 @@
 // VITE_API_URL is baked in at build time. In the Docker image it defaults to
 // "/api" (proxied by nginx). During `npm run dev` it falls back to the local
 // uvicorn server. An explicit empty string means "same origin".
-const DEFAULT_BASE = import.meta.env.DEV ? 'http://localhost:8000' : '/api';
-export const API_BASE = String(import.meta.env.VITE_API_URL ?? DEFAULT_BASE).replace(/\/+$/, '');
+import { normalizeNews } from './lib/news.js';
+
+const DEFAULT_BASE = import.meta.env?.DEV ? 'http://localhost:8000' : '/api';
+export const API_BASE = String(import.meta.env?.VITE_API_URL ?? DEFAULT_BASE).replace(/\/+$/, '');
 
 /**
  * kind: 'network' (never reached the API), 'upstream' (502/503/504, the API
@@ -67,6 +69,16 @@ export async function fetchUpcoming({ signal } = {}) {
     throw new ApiError('parse', 'The prediction service returned an unexpected response.');
   }
   return data;
+}
+
+/** Read the server's news cache; this never initiates publisher ingestion. */
+export async function fetchNews({ signal } = {}) {
+  const data = await getJson('/news', { signal, params: { limit: 50 } });
+  try {
+    return normalizeNews(data);
+  } catch (error) {
+    throw new ApiError('parse', error.message);
+  }
 }
 
 /** Fetch the live track record. Resolves to the raw response object. */

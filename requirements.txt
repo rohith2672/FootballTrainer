@@ -25,6 +25,7 @@ httpx
 # HTTP / ingestion
 requests
 responses
+defusedxml>=0.7.1
 tzdata  # zoneinfo database on Windows (Europe/London kickoff conversion)
 
 # Testing

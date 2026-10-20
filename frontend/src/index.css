@@ -60,6 +60,27 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Football headlines use the same surfaces and focus treatment as fixtures. */
+.news-container { display: grid; gap: 20px; }
+.news-intro h2 { margin-bottom: 10px; }
+.news-intro p, .news-note, .news-sync { color: var(--text-secondary); line-height: 1.6; }
+.news-container a { color: var(--accent); text-underline-offset: 4px; }
+.news-refresh { gap: 16px; flex-wrap: wrap; }
+.news-sync { font-size: 0.88rem; }
+.news-note { font-size: 0.88rem; }
+.news-list { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.news-card { height: 100%; padding: 24px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: var(--bg-surface); }
+.news-card h3 { font-size: 1.1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.news-card h3 a { color: var(--text-primary); }
+.news-card h3 a:hover { color: var(--accent); }
+.news-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 12px; }
+.news-status { padding: 32px 0; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  .news-list { grid-template-columns: minmax(0, 1fr); }
+  .news-card { padding: 18px; }
+  .news-sync { overflow-wrap: anywhere; }
+}
+
 /* --- Reset & Base --- */
 *,
 *::before,
