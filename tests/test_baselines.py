@@ -42,13 +42,24 @@ def test_class_prior_missing_class_is_finite():
 
 def test_available_baselines_ignore_odds_columns():
     no_odds = make_matches(seasons=(2020,), per_season=30)
-    # make_matches carries every FEATURE_COLS column, so the elo baseline (needs elo_diff) is available
-    assert B.available_baselines(no_odds) == ["uniform", "class_prior", "elo"]
-    assert B.available_baselines(no_odds.drop(columns=["elo_diff"])) == ["uniform", "class_prior"]
+    # make_matches carries every FEATURE_COLS column, so the elo baseline (needs elo_diff) and the
+    # poisson baseline (needs pois_p_*) are available
+    assert B.available_baselines(no_odds) == ["uniform", "class_prior", "elo", "poisson"]
+    assert B.available_baselines(no_odds.drop(columns=["elo_diff", "pois_p_draw"])) == ["uniform", "class_prior"]
     # odds columns in the data never create an odds-based baseline
     with_odds = make_matches(seasons=(2020,), per_season=30, with_odds=True)
-    assert B.available_baselines(with_odds) == ["uniform", "class_prior", "elo"]
-    assert set(B.BASELINES) == {"uniform", "class_prior", "elo"}
+    assert B.available_baselines(with_odds) == ["uniform", "class_prior", "elo", "poisson"]
+    assert set(B.BASELINES) == {"uniform", "class_prior", "elo", "poisson"}
+
+
+def test_poisson_baseline_returns_engine_probabilities_unchanged():
+    ev = pd.DataFrame({"target": [0, 1], "pois_p_home": [0.5, 0.2], "pois_p_draw": [0.3, 0.3],
+                       "pois_p_away": [0.2, 0.5]})
+    p = B.poisson(ev.iloc[:0], ev)
+    assert np.allclose(p, [[0.5, 0.3, 0.2], [0.2, 0.3, 0.5]])
+    scores, mask = B.evaluate_baseline("poisson", ev.iloc[:0], ev)
+    assert mask.all() and scores["log_loss"] == pytest.approx(-(math.log(0.5) + math.log(0.3)) / 2)
+    assert np.isnan(B.poisson(ev, ev.drop(columns=["pois_p_draw"]))).all()
 
 
 def test_register_baseline_hook():

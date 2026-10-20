@@ -113,6 +113,60 @@ def test_engine_elo_columns_consistent():
     r1 = out.iloc[1]
     assert r1["home_elo"] > 1500 > r1["away_elo"]
     assert r1["home_elo"] + r1["away_elo"] == pytest.approx(3000.0)
-    assert r1["elo_diff"] == pytest.approx(r1["home_elo"] - r1["away_elo"] + E.HOME_ADVANTAGE)
+    # the league's home advantage was learned from game 1 (a home win)
+    ha1 = E.HOME_ADVANTAGE + E.HOME_ADVANTAGE_RATE * (1.0 - E.expected_home_score(1500, 1500))
+    assert r1["elo_diff"] == pytest.approx(r1["home_elo"] - r1["away_elo"] + ha1)
     assert 1 / (1 + 10 ** (-r1["elo_diff"] / 400)) == pytest.approx(r1["elo_expected_home"])
     assert math.isfinite(r1["elo_expected_home"])
+
+
+def test_engine_elo_matches_public_api_replay():
+    """Replaying matches day by day through EloRatings() reproduces the engine's Elo columns."""
+    from tests.helpers_features import make_league_matches
+
+    df = make_league_matches(leagues=("PL", "PD"), seasons=(2019, 2020), n_teams=6, with_cl=True)
+    out = compute_features(df)
+    r = E.EloRatings()
+    pending = []
+    for day, grp in df.groupby(df["date"].dt.normalize(), sort=True):
+        for i, m in grp.iterrows():
+            he = r.commit(m.home_team, m.league, m.season)
+            ae = r.commit(m.away_team, m.league, m.season)
+            assert out.loc[i, "home_elo"] == pytest.approx(he)
+            assert out.loc[i, "elo_diff"] == pytest.approx(he - ae + r.home_advantage_for(m.league))
+            pending.append((m, he, ae))
+        for m, he, ae in pending:
+            r.apply_result(m.home_team, m.away_team, m.league, m.season, m.home_goals, m.away_goals, he, ae)
+        pending.clear()
+
+
+def test_defaults_are_module_constants_and_kwargs_override():
+    r = E.EloRatings()
+    assert (r.k_factor, r.home_advantage, r.season_regression, r.margin_cap, r.home_advantage_rate) == (
+        E.K_FACTOR, E.HOME_ADVANTAGE, E.SEASON_REGRESSION, E.MARGIN_CAP, E.HOME_ADVANTAGE_RATE)
+    assert r.home_advantage_for("PL") == E.HOME_ADVANTAGE
+    c = E.EloRatings(k_factor=30, home_advantage=80, season_regression=0.5, margin_cap=2,
+                     league_home_advantage={"PD": 100}, home_advantage_rate=0)
+    assert c.home_advantage_for("PL") == 80 and c.home_advantage_for("PD") == 100
+    assert E.rating_delta(1500, 1500, 1, 0, k_factor=30) == pytest.approx(
+        1.5 * E.rating_delta(1500, 1500, 1, 0, k_factor=20))
+
+
+def test_margin_cap_limits_goal_difference_multiplier():
+    assert E.goal_diff_multiplier(5, margin_cap=2) == E.goal_diff_multiplier(2, margin_cap=None)
+    assert E.goal_diff_multiplier(1, margin_cap=2) == E.goal_diff_multiplier(1, margin_cap=None)
+    assert E.goal_diff_multiplier(0, margin_cap=0) == 1.0
+
+
+def test_adaptive_home_advantage_moves_with_home_results_per_league():
+    r = E.EloRatings(home_advantage_rate=5.0)
+    start = r.home_advantage_for("PL")
+    for i in range(20):                      # equal teams, home side keeps losing in PL
+        he, ae = r.commit(f"H{i}", "PL", 2020), r.commit(f"A{i}", "PL", 2020)
+        r.apply_result(f"H{i}", f"A{i}", "PL", 2020, 0, 1, he, ae)
+    assert r.home_advantage_for("PL") < start
+    assert r.home_advantage_for("PD") == start              # other competitions unaffected
+    fixed = E.EloRatings(home_advantage_rate=0.0)
+    he, ae = fixed.commit("X", "PL", 2020), fixed.commit("Y", "PL", 2020)
+    fixed.apply_result("X", "Y", "PL", 2020, 0, 1, he, ae)
+    assert fixed.home_advantage_for("PL") == fixed.home_advantage

@@ -115,6 +115,22 @@ def elo(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
     return out
 
 
+POISSON_COLUMNS = ("pois_p_home", "pois_p_draw", "pois_p_away")
+
+
+@register_baseline("poisson", requires_columns=POISSON_COLUMNS)
+def poisson(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
+    """The engine's online Poisson / Dixon-Coles probabilities as they are (no fitting).
+
+    They are point-in-time engine features, so using them directly is leakage-free.
+    """
+    if not all(c in eval_df.columns for c in POISSON_COLUMNS):
+        return np.full((len(eval_df), 3), np.nan)
+    p = eval_df[list(POISSON_COLUMNS)].to_numpy(dtype=float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return p / p.sum(axis=1, keepdims=True)   # already sums to 1; guards rounding / synthetic data
+
+
 # ---------------------------------------------------------------------------
 # Evaluation helpers
 # ---------------------------------------------------------------------------
