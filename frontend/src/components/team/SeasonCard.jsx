@@ -1,5 +1,5 @@
 import { DASH, formatRecord } from '../../lib/teams.js';
-import { fmtGoalDiff, fmtSeason, seasonSplitRows } from '../../lib/teamPage.js';
+import { fmtGoalDiff, fmtSeason, isCurrentSeason, seasonSplitRows, seasonTableCaption } from '../../lib/teamPage.js';
 import { leagueInfo } from '../../lib/matches.js';
 import { Card } from './common';
 
@@ -9,7 +9,7 @@ const val = (v) => (Number.isInteger(v) ? v : DASH);
 function SeasonCard({ season, league }) {
   if (!season || typeof season !== 'object') {
     return (
-      <Card title="This season">
+      <Card title="Domestic league season">
         <p className="tp-muted">
           No domestic league season on record — this team only appears in Champions League history.
         </p>
@@ -18,6 +18,7 @@ function SeasonCard({ season, league }) {
   }
   const rows = seasonSplitRows(season);
   const leagueName = league ? leagueInfo(league).name : 'League';
+  const current = isCurrentSeason(season.season);
 
   return (
     <Card title={`${leagueName} ${fmtSeason(season.season)}`}>
@@ -46,7 +47,7 @@ function SeasonCard({ season, league }) {
       {rows.length ? (
         <div className="table-scroll" role="region" aria-label="Home and away split" tabIndex={0}>
           <table className="data-table season-table">
-            <caption className="sr-only">Home and away record this season</caption>
+            <caption className="sr-only">{seasonTableCaption(season.season)}</caption>
             <thead>
               <tr>
                 <th scope="col">Venue</th>
@@ -75,6 +76,11 @@ function SeasonCard({ season, league }) {
             </tbody>
           </table>
         </div>
+      ) : null}
+      {Number.isInteger(season.season) && !current ? (
+        <p className="team-note">
+          Their most recent {league ? leagueName : 'domestic league'} season on record, not the current season.
+        </p>
       ) : null}
       <p className="team-note">Domestic league matches only; cup and European games are excluded.</p>
     </Card>

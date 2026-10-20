@@ -15,6 +15,8 @@ export const VENUE_OPTIONS = [
   { value: 'away', label: 'Away' },
 ];
 export const MATCH_LIMITS = { initial: 20, more: 50 };
+/** Document title for a team name the API does not know. */
+export const NOT_FOUND_TITLE = 'Team not found — Match Predictor';
 
 export const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
@@ -38,6 +40,42 @@ export function fmtDate(value) {
 export function fmtSeason(season) {
   if (!isInt(season)) return DASH;
   return `${season}/${String((season + 1) % 100).padStart(2, '0')}`;
+}
+
+/**
+ * Start year of the season in progress on `today` (1 July rollover, as in the
+ * backend's season_start_year): 2026-06-30 → 2025, 2026-07-01 → 2026.
+ */
+export function currentSeasonStart(today = new Date()) {
+  const d = today instanceof Date ? today : new Date(today);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+/** True when `season` (a start year) is the season in progress on `today`. */
+export function isCurrentSeason(season, today = new Date()) {
+  return isInt(season) && season === currentSeasonStart(today);
+}
+
+/**
+ * A team whose last domestic league is known but which is not in that league's
+ * current season (relegated, or otherwise left): the profile has a league and
+ * `elo.league_size`, but no `elo.rank_in_league`. Returns null otherwise, else
+ * {lastSeason: "2025/26" | null} (from `profile.season`, when it is not the
+ * current season).
+ */
+export function formerLeagueInfo(profile, today = new Date()) {
+  if (!profile || typeof profile !== 'object' || !profile.league) return null;
+  const elo = profile.elo && typeof profile.elo === 'object' ? profile.elo : {};
+  if (isInt(elo.rank_in_league) || !isInt(elo.league_size) || elo.league_size <= 0) return null;
+  const season = profile.season && typeof profile.season === 'object' ? profile.season.season : null;
+  return { lastSeason: isInt(season) && !isCurrentSeason(season, today) ? fmtSeason(season) : null };
+}
+
+/** Caption for the season card's home/away table. */
+export function seasonTableCaption(season, today = new Date()) {
+  if (!isInt(season)) return 'Home and away record';
+  return isCurrentSeason(season, today) ? 'Home and away record this season' : `${fmtSeason(season)} home and away record`;
 }
 
 // ---- Elo history ---------------------------------------------------------------

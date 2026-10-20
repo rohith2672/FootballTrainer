@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNews } from '../../hooks/useNews';
-import { filterNewsForTeams, publicationAge } from '../../lib/news.js';
+import { filterNewsForTeams, publicationAge, teamNewsState } from '../../lib/news.js';
 import { ROUTES } from '../../lib/routes.js';
 import { Card, Skeleton } from './common';
 
@@ -14,12 +14,22 @@ function TeamNews({ name }) {
     [data, name],
   );
 
+  const state = teamNewsState({ data, loading, error, matched: articles });
+
   let body;
-  if (!data && loading) {
+  if (state === 'loading') {
     body = <Skeleton lines={3} />;
-  } else if (!data && error) {
+  } else if (state === 'error') {
     body = <p className="tp-muted">Headlines are unavailable right now.</p>;
-  } else if (!articles.length) {
+  } else if (state === 'unavailable') {
+    body = (
+      <p className="tp-muted">
+        Headlines aren’t available yet. The news service will try again at its next scheduled check.
+      </p>
+    );
+  } else if (state === 'no-headlines') {
+    body = <p className="tp-muted">No headlines have been saved yet.</p>;
+  } else if (state === 'no-match') {
     body = <p className="tp-muted">No recent headlines mention {name}.</p>;
   } else {
     body = (
@@ -42,7 +52,7 @@ function TeamNews({ name }) {
   return (
     <Card title={`News mentioning ${name}`}>
       {body}
-      {data?.stale ? <p className="team-note">The headline cache is out of date.</p> : null}
+      {data?.stale && (state === 'list' || state === 'no-match') ? <p className="team-note">The headline cache is out of date.</p> : null}
       <p className="team-note">
         Matched by team name in headlines. <a href={ROUTES.news}>All football news</a>
       </p>

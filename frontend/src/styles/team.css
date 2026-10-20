@@ -367,6 +367,13 @@
   font-size: 1rem;
 }
 
+/* A word value (e.g. "Not ranked") instead of a number. */
+.team-stat-text {
+  display: inline-block;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
 /* --- Match preparation --- */
 .prep-fixture {
   display: grid;

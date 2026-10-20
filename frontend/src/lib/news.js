@@ -221,3 +221,21 @@ export function filterNewsForTeams(articles, teams) {
   if (!Array.isArray(articles)) return [];
   return articles.filter((article) => matchesTeams(article, teams));
 }
+
+/**
+ * What the team page's news card shows:
+ * - 'loading' / 'error': nothing loaded yet (first request pending / failed);
+ * - 'list': at least one cached headline mentions the team;
+ * - 'unavailable': the news cache is unavailable (status "unavailable"), so
+ *   nothing can be said about mentions;
+ * - 'no-headlines': the cache is reachable but holds no headlines at all;
+ * - 'no-match': headlines exist and none mention the team.
+ * `matched` is the already filtered list for the team.
+ */
+export function teamNewsState({ data, loading = false, error = null, matched = [] } = {}) {
+  if (!data) return loading || !error ? 'loading' : 'error';
+  if (matched.length) return 'list';
+  if (data.status === 'unavailable') return 'unavailable';
+  if (!Array.isArray(data.articles) || !data.articles.length) return 'no-headlines';
+  return 'no-match';
+}

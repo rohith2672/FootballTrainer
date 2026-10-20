@@ -7,6 +7,7 @@ import {
   plottedIndexes,
   segments,
   stepIndex,
+  timeTicks,
 } from '../../lib/charts.js';
 import '../../styles/charts.css';
 
@@ -67,8 +68,12 @@ export function Marker({ shape, x, y, r, className }) {
  *
  * Props:
  * - `title`, `desc`: accessible name and description (also the SVG <title>/<desc>).
- * - `points`: [{key, xLabel, y (number|null), tooltip, marker?: 'W'|'D'|'L', className?}].
+ * - `points`: [{key, xLabel, y (number|null), tooltip, marker?: 'W'|'D'|'L', className?, x?}].
  *   Points are evenly spaced; null y breaks the line.
+ * - `xMode`: 'index' (default; evenly spaced, per-point `xLabel` ticks) or
+ *   'time': every point carries `x` as a day number (charts.dayNumber), points
+ *   are placed proportionally in time (gaps such as a summer break show) and
+ *   the x ticks are month starts (with the year when the range spans years).
  * - `seriesClass`: class for the line and default markers (e.g. "model").
  * - `yFormat(tick)`, `yAxisTitle`, `xAxisTitle`, `minSpan` (smallest y range), `height`.
  * - `legend`: optional node rendered above the chart.
@@ -96,6 +101,7 @@ function LineChart({
   table = null,
   emptyMessage = 'No data to chart yet.',
   className = '',
+  xMode = 'index',
 }) {
   const [wrapRef, width] = useElementWidth();
   const svgRef = useRef(null);
@@ -108,13 +114,14 @@ function LineChart({
   const [active, setActive] = useState(null);
   const [focusIndex, setFocusIndex] = useState(null);
 
+  const timeMode = xMode === 'time';
   const geometry = useMemo(
     () =>
       lineGeometry(
         points.map((p) => p.y),
-        { width, height, margin, minSpan },
+        { width, height, margin, minSpan, xValues: timeMode ? points.map((p) => p.x) : null },
       ),
-    [points, width, height, margin, minSpan],
+    [points, width, height, margin, minSpan, timeMode],
   );
   const plotted = useMemo(() => (geometry ? plottedIndexes(geometry.ys) : []), [geometry]);
 
@@ -123,6 +130,13 @@ function LineChart({
   }
 
   const { axis, innerW, innerH, bottom, xs, ys, y, labelStep } = geometry;
+  // Time mode: month-start ticks from the x scale (null x → index fallback).
+  const xTicks =
+    timeMode && geometry.x
+      ? timeTicks(geometry.xDomain[0], geometry.xDomain[1], innerW).map((t) => ({ ...t, px: geometry.x(t.value) }))
+      : null;
+  const tickAnchor = (px) =>
+    px > margin.left + innerW - 26 ? 'end' : px < margin.left + 4 ? 'start' : 'middle';
   // Clamp state that may refer to points from an earlier dataset.
   const activeIndex = active && plotted.includes(active.index) ? active.index : null;
   const tabStop = plotted.includes(focusIndex) ? focusIndex : plotted[plotted.length - 1];
@@ -208,16 +222,25 @@ function LineChart({
 
             {/* X axis */}
             <line x1={margin.left} x2={margin.left + innerW} y1={bottom} y2={bottom} className="chart-axis" />
-            {points.map((p, i) =>
-              i % labelStep === 0 ? (
-                <g key={`x${p.key}`}>
-                  <line x1={xs[i]} x2={xs[i]} y1={bottom} y2={bottom + 5} className="chart-axis" />
-                  <text x={xs[i]} y={bottom + 20} textAnchor="middle" className="chart-tick">
-                    {p.xLabel}
-                  </text>
-                </g>
-              ) : null,
-            )}
+            {xTicks
+              ? xTicks.map((t) => (
+                  <g key={`t${t.value}`}>
+                    <line x1={t.px} x2={t.px} y1={bottom} y2={bottom + 5} className="chart-axis" />
+                    <text x={t.px} y={bottom + 20} textAnchor={tickAnchor(t.px)} className="chart-tick">
+                      {t.label}
+                    </text>
+                  </g>
+                ))
+              : points.map((p, i) =>
+                  i % labelStep === 0 ? (
+                    <g key={`x${p.key}`}>
+                      <line x1={xs[i]} x2={xs[i]} y1={bottom} y2={bottom + 5} className="chart-axis" />
+                      <text x={xs[i]} y={bottom + 20} textAnchor="middle" className="chart-tick">
+                        {p.xLabel}
+                      </text>
+                    </g>
+                  ) : null,
+                )}
             {xAxisTitle ? (
               <text x={margin.left + innerW / 2} y={height - 8} textAnchor="middle" className="chart-axis-title">
                 {xAxisTitle}

@@ -38,7 +38,7 @@ export default function News({ onOpenPicker }) {
   return (
     <section className="news-container" aria-labelledby="news-heading">
       <div className="news-intro">
-        <h2 id="news-heading">Football news</h2>
+        <h2 id="news-heading">Latest headlines</h2>
         <p>Headlines from <a href="https://www.bbc.com/sport/football" target="_blank" rel="noopener noreferrer">BBC Sport<span className="sr-only"> (opens in a new tab)</span></a>. Our service checks for new stories every hour.</p>
       </div>
       <div className="refresh-bar news-refresh">

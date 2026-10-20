@@ -207,6 +207,15 @@ export function describeTrackRecordError(err) {
   return describeError(err);
 }
 
+/**
+ * True when an upstream (502/503/504) error's detail says a data source is not
+ * configured (e.g. "Fixture source not configured (FOOTBALL_DATA_API_KEY
+ * missing)"): a permanent setup problem rather than a transient outage.
+ */
+export function isNotConfigured(err) {
+  return err?.kind === 'upstream' && typeof err.detail === 'string' && /not configured|api[_ ]?key/i.test(err.detail);
+}
+
 /** Map an error to user-facing copy. */
 export function describeError(err) {
   switch (err?.kind) {
@@ -216,6 +225,12 @@ export function describeError(err) {
         message: 'The app could not connect to the backend. Check that the API is running and your connection is working, then try again.',
       };
     case 'upstream':
+      if (isNotConfigured(err)) {
+        return {
+          title: 'Data source not configured',
+          message: `${err.detail.replace(/\.?$/, '.')} This is a server configuration problem, not a temporary outage — retrying won’t help until it is fixed.`,
+        };
+      }
       return {
         title: 'Couldn’t reach the data provider',
         message: 'The prediction service is up but could not get fixtures from the data provider right now. This is usually temporary — try again in a minute.',

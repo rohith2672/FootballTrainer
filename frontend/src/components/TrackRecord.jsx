@@ -14,6 +14,7 @@ import {
   fmtLongDate,
   fmtPct0,
   fmtPercent,
+  modelVersionParts,
   normalizeTrackRecord,
   predictedCode,
   resultLabel,
@@ -29,6 +30,18 @@ function Tile({ label, value, note, wide = false }) {
       {note ? <div className="metric-note">{note}</div> : null}
     </div>
   );
+}
+
+/** Model version with each token (name@commit, date) kept on one line. */
+function ModelVersion({ value }) {
+  const parts = modelVersionParts(value);
+  if (!parts.length) return DASH;
+  return parts.map((part, i) => (
+    <span key={`${i}-${part}`}>
+      {i ? ' ' : null}
+      <span className="nowrap">{part}</span>
+    </span>
+  ));
 }
 
 function Headline({ record }) {
@@ -58,7 +71,7 @@ function Headline({ record }) {
           value={nSettled}
           note={`of ${nPredictions} recorded`}
         />
-        <Tile label="Model version" value={modelVersion ?? DASH} wide />
+        <Tile label="Model version" value={<ModelVersion value={modelVersion} />} wide />
       </div>
       <p className="tr-note">
         Class prior and uniform are simple yardsticks: a useful model should score below both.
@@ -73,13 +86,13 @@ function LeagueTable({ rows }) {
     <section className="tr-section" aria-labelledby="tr-leagues">
       <h2 id="tr-leagues" className="tr-heading">By league</h2>
       <div className="table-scroll" role="region" aria-label="Per-league results" tabIndex={0}>
-        <table className="data-table">
+        <table className="data-table tr-table">
           <thead>
             <tr>
               <th scope="col">League</th>
               <th scope="col" className="num">Settled</th>
               <th scope="col" className="num">Accuracy</th>
-              <th scope="col" className="num">Model log-loss</th>
+              <th scope="col" className="num">Model <span className="nowrap">log-loss</span></th>
             </tr>
           </thead>
           <tbody>
@@ -163,12 +176,12 @@ function Backtest({ backtest }) {
         . It says nothing about predictions made since. <strong>Log-loss: lower is better.</strong>
       </p>
       <div className="table-scroll">
-        <table className="data-table">
+        <table className="data-table tr-table">
           <caption className="sr-only">Backtest log-loss by predictor</caption>
           <thead>
             <tr>
               <th scope="col">Predictor</th>
-              <th scope="col" className="num">Log-loss</th>
+              <th scope="col" className="num"><span className="nowrap">Log-loss</span></th>
               <th scope="col" className="num">Accuracy</th>
             </tr>
           </thead>
@@ -304,7 +317,11 @@ function TrackRecord() {
                 : ''}
               .
             </p>
-            {record.modelVersion ? <p className="tr-note">Current model: {record.modelVersion}</p> : null}
+            {record.modelVersion ? (
+              <p className="tr-note">
+                Current model: <ModelVersion value={record.modelVersion} />
+              </p>
+            ) : null}
           </div>
         )}
         <Backtest backtest={record.backtest} />

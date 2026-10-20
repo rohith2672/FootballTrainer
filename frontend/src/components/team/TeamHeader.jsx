@@ -1,7 +1,7 @@
 import { MAX_FAVOURITES } from '../../lib/favourites.js';
 import { leagueInfo } from '../../lib/matches.js';
 import { DASH, formatAverage, formatElo, formatEloChange, formatRank } from '../../lib/teams.js';
-import { fmtDate, plural } from '../../lib/teamPage.js';
+import { fmtDate, formerLeagueInfo, plural } from '../../lib/teamPage.js';
 import StarToggle from './StarToggle';
 import LeagueBadge from '../icons/LeagueBadge';
 import { StarIcon } from '../icons';
@@ -44,6 +44,8 @@ function TeamHeader({ profile, favourites, onOpenPicker }) {
   const info = league ? leagueInfo(league) : null;
   const change = elo?.change_last_5;
   const changeClass = typeof change === 'number' ? (change > 0 ? 'up' : change < 0 ? 'down' : '') : '';
+  // Relegated (or otherwise left): `league` is the last top-flight league.
+  const former = info ? formerLeagueInfo(profile) : null;
 
   return (
     <header className="team-header">
@@ -55,6 +57,13 @@ function TeamHeader({ profile, favourites, onOpenPicker }) {
               {info ? <LeagueBadge code={league} size="sm" /> : null}
               {info ? info.name : 'No domestic league on record'}
             </span>
+            {former ? (
+              <span className="team-meta-item team-former">
+                {former.lastSeason
+                  ? `Last top-flight season: ${former.lastSeason}`
+                  : `Not in the current ${info.name} season`}
+              </span>
+            ) : null}
             {lastMatch ? (
               <span className="team-meta-item">
                 Last match {fmtDate(lastMatch)}
@@ -78,8 +87,8 @@ function TeamHeader({ profile, favourites, onOpenPicker }) {
         <Stat label="Elo rating" value={formatElo(elo?.rating)} note="After the latest match" />
         <Stat
           label="League rank"
-          value={formatRank(elo?.rank_in_league, elo?.league_size)}
-          note={league ? 'By Elo rating' : 'No domestic league'}
+          value={former ? <span className="team-stat-text">Not ranked</span> : formatRank(elo?.rank_in_league, elo?.league_size)}
+          note={former ? `Not in the current ${info.name} season` : league ? 'By Elo rating' : 'No domestic league'}
         />
         <Stat
           label="Elo change"

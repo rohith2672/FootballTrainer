@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { describeTeamError, isTeamNotFound } from '../api';
 import { useFavourites } from '../hooks/useFavourites';
 import { useTeam } from '../hooks/useTeam';
 import { ROUTES } from '../lib/routes.js';
-import { MATCH_LIMITS } from '../lib/teamPage.js';
+import { MATCH_LIMITS, NOT_FOUND_TITLE } from '../lib/teamPage.js';
 import AveragesCard from './team/AveragesCard';
 import EloHistoryCard from './team/EloHistoryCard';
 import MatchPrep from './team/MatchPrep';
@@ -76,6 +76,15 @@ function TeamPage({ name, onOpenPicker }) {
     venue,
     limit,
   });
+
+  // App titles the tab after the route's team name; an unknown name gets a
+  // "not found" title once the profile 404s. (The Elo history and match
+  // requests run in parallel with the profile and their failures are never
+  // shown on the not-found page.)
+  const notFound = !data && isTeamNotFound(error);
+  useEffect(() => {
+    if (notFound) document.title = NOT_FOUND_TITLE;
+  }, [notFound]);
 
   if (!data && error) {
     return (

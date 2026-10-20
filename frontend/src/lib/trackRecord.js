@@ -1,6 +1,6 @@
 // Pure helpers for the track-record page. Lower log-loss is better.
-import { DASH } from './explain';
-import { parseLocalDate } from './matches';
+import { DASH } from './explain.js';
+import { parseLocalDate } from './matches.js';
 
 export const WEEK_OPTIONS = [8, 13, 26, 52];
 export const DEFAULT_WEEKS = 26;
@@ -83,6 +83,15 @@ export function normalizeTrackRecord(raw) {
         }
       : null,
   };
+}
+
+/**
+ * Split a model version such as "lgbm@6172844 2026-10-15" into its
+ * whitespace-separated tokens (["lgbm@6172844", "2026-10-15"]) so each can be
+ * rendered unbreakable; lines then wrap only between tokens. [] for non-strings.
+ */
+export function modelVersionParts(version) {
+  return typeof version === 'string' ? version.trim().split(/\s+/).filter(Boolean) : [];
 }
 
 export const BASELINE_LABELS = {

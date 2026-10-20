@@ -48,14 +48,74 @@ export function labelStep(n, innerW, minGap = 70) {
   return Math.max(1, Math.ceil(n / maxLabels));
 }
 
+// ---- Time axis ---------------------------------------------------------------
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whole days since 1970-01-01 for a "YYYY-MM-DD…" string (UTC, so there is
+ * no daylight-saving drift), or null when unparseable.
+ */
+export function dayNumber(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof value === 'string' ? value : '');
+  if (!m) return null;
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(ms) ? null : Math.round(ms / DAY_MS);
+}
+
+const utcDate = (day) => new Date(day * DAY_MS);
+const fmtUtc = (day, options) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options }).format(utcDate(day));
+const MONTH_STEPS = [1, 2, 3, 4, 6, 12];
+
+/**
+ * Ticks for a time x axis over day numbers [d0, d1]: month starts, thinned
+ * so labels stay at least `minGap` px apart. Labels are "Aug", or "Aug 2025"
+ * when the range spans more than one calendar year. Ranges too short for two
+ * month starts get the first and last day instead ("12 Oct").
+ * Returns [{value (day number), label}].
+ */
+export function timeTicks(d0, d1, innerW, minGap = 70) {
+  if (!isNum(d0) || !isNum(d1)) return [];
+  const lo = Math.min(d0, d1);
+  const hi = Math.max(d0, d1);
+  const first = utcDate(lo);
+  const last = utcDate(hi);
+  const spansYears = first.getUTCFullYear() !== last.getUTCFullYear();
+  const maxLabels = Math.max(2, Math.floor(innerW / minGap));
+
+  // Every month start inside the range, as a month index (year * 12 + month).
+  const months = [];
+  let m = first.getUTCFullYear() * 12 + first.getUTCMonth() + (first.getUTCDate() === 1 ? 0 : 1);
+  const end = last.getUTCFullYear() * 12 + last.getUTCMonth();
+  for (; m <= end; m += 1) months.push(m);
+
+  if (months.length < 2) {
+    const dayOpts = spansYears ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' };
+    const ends = lo === hi ? [lo] : [lo, hi];
+    return ends.map((value) => ({ value, label: fmtUtc(value, dayOpts) }));
+  }
+
+  const step = MONTH_STEPS.find((s) => months.filter((x) => x % s === 0).length <= maxLabels) ?? 12;
+  const aligned = months.filter((x) => x % step === 0);
+  const picked = aligned.length ? aligned : [months[0]];
+  const opts = spansYears ? { month: 'short', year: 'numeric' } : { month: 'short' };
+  return picked.map((x) => {
+    const value = Math.round(Date.UTC(Math.floor(x / 12), x % 12, 1) / DAY_MS);
+    return { value, label: fmtUtc(value, opts) };
+  });
+}
+
 /**
  * Lay out a single-series chart.
- * `values`: array of numbers or null (null breaks the line). Returns
- * null when there is nothing to plot, else
- * {axis, innerW, innerH, bottom, xs, ys, labelStep, y} where xs/ys line up with
- * `values` (ys[i] is null for missing values) and y() maps a value to px.
+ * `values`: array of numbers or null (null breaks the line).
+ * `xValues` (optional): numeric x per value (e.g. day numbers) for a
+ * proportional x scale; without it points are evenly spaced by index.
+ * Returns null when there is nothing to plot, else
+ * {axis, innerW, innerH, bottom, xs, ys, labelStep, y, x|null, xDomain|null}
+ * where xs/ys line up with `values` (ys[i] is null for missing values), y()
+ * maps a value to px and x() (proportional scale only) maps an x value to px.
  */
-export function lineGeometry(values, { width, height, margin, minSpan = 0.02, minLabelGap = 70 }) {
+export function lineGeometry(values, { width, height, margin, minSpan = 0.02, minLabelGap = 70, xValues = null }) {
   const list = Array.isArray(values) ? values : [];
   const present = list.filter(isNum);
   if (!present.length) return null;
@@ -63,7 +123,18 @@ export function lineGeometry(values, { width, height, margin, minSpan = 0.02, mi
   const innerW = Math.max(1, width - margin.left - margin.right);
   const innerH = Math.max(1, height - margin.top - margin.bottom);
   const y = linearScale(axis.min, axis.max, margin.top + innerH, margin.top);
-  const xs = list.map((_, i) => indexX(i, list.length, margin.left, innerW));
+  const proportional =
+    Array.isArray(xValues) && xValues.length === list.length && list.length > 0 && xValues.every(isNum);
+  let x = null;
+  let xDomain = null;
+  let xs;
+  if (proportional) {
+    xDomain = [Math.min(...xValues), Math.max(...xValues)];
+    x = linearScale(xDomain[0], xDomain[1], margin.left, margin.left + innerW);
+    xs = xValues.map((v) => x(v));
+  } else {
+    xs = list.map((_, i) => indexX(i, list.length, margin.left, innerW));
+  }
   const ys = list.map((v) => (isNum(v) ? y(v) : null));
   return {
     axis,
@@ -73,6 +144,8 @@ export function lineGeometry(values, { width, height, margin, minSpan = 0.02, mi
     xs,
     ys,
     y,
+    x,
+    xDomain,
     labelStep: labelStep(list.length, innerW, minLabelGap),
   };
 }

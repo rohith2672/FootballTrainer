@@ -1631,6 +1631,34 @@ body::after {
   background: var(--accent-row);
 }
 
+/* Track-record tables: the label column and the headers wrap (headers only
+   between words; "log-loss" is kept whole) so the numeric columns stay on
+   screen at phone widths. The numbers themselves never wrap. */
+.data-table.tr-table thead th,
+.data-table.tr-table tbody th {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.data-table.tr-table tbody th {
+  min-width: 5.5rem;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .data-table.tr-table th,
+  .data-table.tr-table td {
+    padding: 0.6rem 0.45rem;
+  }
+
+  .data-table.tr-table thead th {
+    letter-spacing: 0.5px;
+  }
+}
+
 /* --- Recent settled predictions --- */
 .recent-list {
   list-style: none;

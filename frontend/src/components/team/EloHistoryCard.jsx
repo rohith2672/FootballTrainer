@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import LineChart, { Marker } from '../charts/LineChart';
 import { describeTeamError } from '../../api';
+import { dayNumber } from '../../lib/charts.js';
 import { formatElo, formatEloChange } from '../../lib/teams.js';
 import { RESULT_LABELS, eloChartPoints, eloRange, fmtDate } from '../../lib/teamPage.js';
 import { Card, ResultChip, SectionNotice, Skeleton } from './common';
@@ -39,6 +40,7 @@ function EloHistoryCard({ name, eloHistory, error, onRetry, busy }) {
       points.map((p) => ({
         key: p.key,
         xLabel: p.xLabel,
+        x: dayNumber(p.date),
         y: p.elo,
         tooltip: p.tooltip,
         marker: p.result ?? undefined,
@@ -94,6 +96,7 @@ function EloHistoryCard({ name, eloHistory, error, onRetry, busy }) {
           seriesClass="elo"
           yFormat={(t) => String(Math.round(t))}
           minSpan={10}
+          xMode="time"
           height={260}
           margin={MARGIN}
           legend={<Legend />}
@@ -101,7 +104,8 @@ function EloHistoryCard({ name, eloHistory, error, onRetry, busy }) {
           className="elo-chart"
         />
         <p className="team-note">
-          One point per finished match (all competitions), showing the rating after it. Hover, tap or
+          One point per finished match (all competitions), showing the rating after it, placed by date
+          so breaks between seasons show as gaps. Hover, tap or
           use the arrow keys on the chart to inspect a match.
         </p>
       </>
