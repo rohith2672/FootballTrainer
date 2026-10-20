@@ -80,6 +80,8 @@ Response: `Fixture[]`. Each item:
   the feature's push toward the predicted outcome in probability-ish units
   (positive = toward the predicted outcome). `label` is human readable.
 - `details` values may be `null` when the data is missing (e.g. shots for CL).
+  `details.*.days_since_last` is the model input and is capped at 30
+  (`REST_CAP_DAYS`): show `30` as "30+". The team profile's `rest_days` is uncapped.
 - Errors: `503` with `{"detail": "..."}` when every upstream league call failed;
   partial failures return the successful leagues plus header
   `X-Partial-Failure: PD,SA`.
@@ -207,10 +209,17 @@ before it. Default: all finished matches (all are before "now").
 ```
 
 - `elo.rating`: rating after the team's last match. `rank_in_league` /
-  `league_size`: rank (1 = highest) among teams whose latest domestic league is
-  `league` and that played in that league's most recent season in history;
-  both `null` when `league` is null; `rank_in_league` alone is `null` when the
-  team is not in that pool (e.g. it did not play that season). `change_last_5` = `elo_after` of the latest
+  `league_size`: rank (1 = highest) by current rating (post-last-match Elo)
+  within the league's pool, restricted to teams whose latest domestic league is
+  `league`. Pool = every team that played the league's most recent season in
+  history, plus — while that roster is smaller than the reference roster (the
+  most recent earlier season with at least `elo.MIN_TABLE_TEAMS` = 8 teams) —
+  reference-season teams that have not played yet, best previous-table
+  position first, up to the reference roster size (early season, postponed
+  openers keep a rank; the worst unplayed sides drop out as promoted teams
+  appear). Without a reference season the pool is the most recent season's
+  roster. Both `null` when `league` is null; `rank_in_league` alone is `null`
+  when the team is not in the pool. `change_last_5` = `elo_after` of the latest
   match − `elo_before` of the 5th latest (fewer if fewer matches); `null` with
   no matches.
 - `form` and `averages` span all competitions (as the engine's form does).
@@ -222,15 +231,17 @@ before it. Default: all finished matches (all are before "now").
   `btts_rate` = both scored; `over25_rate` = total goals ≥ 3.
 - `season` is domestic league only (CL excluded), for the season of the team's
   latest domestic match; `null` for CL-only teams.
-- `rest_days`: days from `last_match_date` to today (or to `as_of`); both
-  `null` without matches.
+- `rest_days`: days from `last_match_date` to today (or to `as_of`), true
+  value, never capped; both `null` without matches.
 - `next_fixture`: the team's next `/upcoming` item (same `Fixture` shape incl.
   probabilities, `top_factors`, `details`), from its domestic league and CL.
   `next_fixture_status`: `"ok"` (fixture present), `"none"` (source reachable,
   no fixture scheduled), `"unavailable"` (API key missing, any needed league
   request failed, model not loaded, or `as_of` given — then `next_fixture` is
   always null). These conditions never fail the profile, and the profile does
-  not store the prediction (unlike `/upcoming`). Matching relies on upstream names
+  not store the prediction (unlike `/upcoming`). Results are cached in process
+  per team: `ok`/`none` for 120 s, `unavailable` (upstream/pipeline failure) for
+  30 s; cleared with the history cache. Matching relies on upstream names
   equalling canonical DB names, as in `/upcoming`.
 
 ### `GET /teams/{name}/matches`

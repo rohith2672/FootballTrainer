@@ -218,3 +218,121 @@ def test_h2h_summary_totals_and_newest_first():
 ])
 def test_resolve_league(table, hist, expected):
     assert ts.resolve_league(table, hist) == expected
+
+
+# ---------------------------------------------------------------------------
+# League rank: season-robust pool (early season, postponed openers, as_of)
+# ---------------------------------------------------------------------------
+TEN = [f"T{i}" for i in range(10)]
+
+
+def full_season(season=2023, teams=TEN, start_id=1) -> list:
+    """Single round robin; the lower-indexed team always wins 1-0, so the table is T0 > T1 > ... > T9."""
+    rows, mid = [], start_id
+    day = pd.Timestamp(f"{season}-08-12 15:00")
+    for i, a in enumerate(teams):
+        for b in teams[i + 1:]:
+            home, away, hg, ag = (a, b, 1, 0) if mid % 2 else (b, a, 0, 1)
+            rows.append(match_row(mid, day, home, away, hg, ag, season=season))
+            mid += 1
+            day += pd.Timedelta(days=1)
+    return rows
+
+
+def opening_day(pairs, season=2024, start_id=5000, day="2024-08-17 15:00") -> list:
+    return [match_row(start_id + k, pd.Timestamp(day) + pd.Timedelta(days=k // 5), h, a, 1, 1, season=season)
+            for k, (h, a) in enumerate(pairs)]
+
+
+def ranked(enr, league="PL"):
+    """{team: rank} for every team the pool contains, plus the pool size."""
+    sizes, ranks = set(), {}
+    for t in ts.known_teams(enr):
+        r, n = ts.league_rank(enr, t, league)
+        sizes.add(n)
+        if r is not None:
+            ranks[t] = r
+    assert len(sizes) == 1
+    return ranks, sizes.pop()
+
+
+def test_rank_early_season_uses_previous_full_roster():
+    """4 of 10 teams have played the new season: still ranked among all 10, not '1st of 4'."""
+    hist = pd.DataFrame(full_season() + opening_day([("T0", "T5"), ("T7", "T2")]))
+    enr = ts.replay_elo(hist)
+    ranks, size = ranked(enr)
+    assert size == 10 and set(ranks) == set(TEN)
+    ratings = ts.latest_ratings(enr)
+    assert sorted(ranks, key=ranks.get) == sorted(TEN, key=lambda t: (-ratings[t], t))
+    assert sorted(ranks.values()) == list(range(1, 11))
+    # teams that have not played yet are ranked by their current (post-last-match) rating
+    assert ts.league_rank(enr, "T9", "PL")[0] == ranks["T9"]
+
+
+def test_rank_postponed_opener_keeps_rank_and_presumed_relegated_drop_out():
+    """9 of 10 played (incl. promoted N1); T4's opener postponed. T4 keeps a rank,
+    the previous season's worst unplayed side (T9) makes room for N1."""
+    pairs = [("T0", "T1"), ("T2", "T3"), ("T5", "T6"), ("T7", "T8"), ("N1", "T0")]
+    hist = pd.DataFrame(full_season() + opening_day(pairs))
+    enr = ts.replay_elo(hist)
+    ranks, size = ranked(enr)
+    assert size == 10
+    assert "T4" in ranks and "N1" in ranks and "T9" not in ranks
+    assert ts.league_rank(enr, "T9", "PL") == (None, 10)
+    # once the new season's roster is complete, only it counts
+    late = opening_day([("T4", "T9"), ("N2", "T3")], start_id=6000, day="2024-08-24 15:00")
+    enr2 = ts.replay_elo(pd.concat([hist, pd.DataFrame(late)], ignore_index=True))
+    ranks2, size2 = ranked(enr2)
+    assert size2 == 12 and {"T4", "T9", "N1", "N2"} <= set(ranks2)   # every side that played
+
+
+def test_rank_without_reference_season_falls_back_to_current_roster():
+    hist = pd.DataFrame(opening_day([("T0", "T1"), ("T2", "T3")]))   # one partial season only
+    assert ranked(ts.replay_elo(hist))[1] == 4
+
+
+def test_rank_respects_as_of():
+    pairs = [("T0", "T1"), ("N1", "T9")]
+    full = pd.DataFrame(full_season() + opening_day(pairs))
+    as_of = dt.date(2024, 8, 1)                                        # before the new season
+    truncated = full.loc[pd.to_datetime(full["date"]).dt.normalize() < pd.Timestamp(as_of)]
+    enr_full, enr_trunc = ts.replay_elo(full), ts.replay_elo(truncated)
+    hist = ts.before_day(enr_full, as_of)
+    index = ts.HistoryIndex(enr_full)                                  # built over FULL history
+    ratings = ts.latest_ratings(enr_trunc)
+    expected = sorted(TEN, key=lambda t: (-ratings[t], t))
+    for t in TEN:
+        # the full-history index must be ignored for the truncated frame
+        assert ts.league_rank(hist, t, "PL", index) == (expected.index(t) + 1, 10)
+    assert ts.league_rank(hist, "N1", "PL", index) == (None, 10)       # promoted later: unknown yet
+    a = ts.build_profile(enr_full, "T9", "PL", as_of=as_of, today=dt.date(2026, 1, 1), index=index)
+    b = ts.build_profile(enr_trunc, "T9", "PL", as_of=None, today=as_of)
+    assert a["elo"] == b["elo"]
+
+
+def test_history_index_is_reused_only_for_its_own_frame(monkeypatch):
+    enr = ts.replay_elo(small_history())
+    index = ts.HistoryIndex(enr)
+    calls = []
+    real = ts._long
+    monkeypatch.setattr(ts, "_long", lambda e: calls.append(1) or real(e))
+    for _ in range(3):
+        ts.build_profile(enr, "A", "PL", as_of=None, today=dt.date(2024, 10, 1), index=index)
+        ts.team_index([("A", "PL")], enr, index)
+    assert len(calls) == 1                                             # built once, lazily
+    assert ts.known_teams(enr, index) == {"A", "B", "C", "X"}
+    ts.build_profile(enr, "A", "PL", as_of=dt.date(2024, 9, 1), today=dt.date(2024, 10, 1), index=index)
+    assert len(calls) == 2                                             # truncated frame: own structures
+
+
+# ---------------------------------------------------------------------------
+# Rest days are the true gap (the engine's 30-day cap is model input only)
+# ---------------------------------------------------------------------------
+def test_rest_days_uncapped_after_90_day_break():
+    from src.features.engine import REST_CAP_DAYS
+
+    enr = ts.replay_elo(small_history())                               # A's last match: 2024-09-18
+    p = ts.build_profile(enr, "A", "PL", as_of=None, today=dt.date(2024, 12, 17))
+    assert p["rest_days"] == 90 > REST_CAP_DAYS
+    q = ts.build_profile(enr, "A", "PL", as_of=dt.date(2024, 12, 17), today=dt.date(2026, 1, 1))
+    assert q["rest_days"] == 90 and q["last_match_date"] == "2024-09-18"

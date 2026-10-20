@@ -10,6 +10,7 @@ feature engine (``src.features.engine.compute_features``) applies it. Keep it in
 sync with the engine if that changes; ``tests/test_team_stats.py`` asserts parity.
 """
 import datetime as dt
+from functools import cached_property
 from typing import Dict, Iterable, List, Optional
 
 import numpy as np
@@ -157,10 +158,8 @@ def before_day(enriched: pd.DataFrame, as_of: Optional[dt.date]) -> pd.DataFrame
     return enriched.loc[enriched["day"] < _ts(as_of)]
 
 
-def known_teams(enriched: pd.DataFrame) -> set:
-    if enriched.empty:
-        return set()
-    return set(enriched["home_team"]).union(enriched["away_team"])
+def known_teams(enriched: pd.DataFrame, index: Optional["HistoryIndex"] = None) -> frozenset:
+    return _index_for(enriched, index).known
 
 
 def team_matches(enriched: pd.DataFrame, team: str) -> pd.DataFrame:
@@ -212,20 +211,60 @@ def _long(enriched: pd.DataFrame) -> pd.DataFrame:
     }).sort_values(["seq", "side"], kind="mergesort")
 
 
-def domestic_league_map(enriched: pd.DataFrame) -> Dict[str, str]:
-    """team -> league of its latest domestic (non-CL) match."""
-    if enriched.empty:
-        return {}
-    lg = _long(enriched)
+def _league_map_of(lg: pd.DataFrame) -> Dict[str, str]:
     lg = lg.loc[lg["league"].isin(DOMESTIC_LEAGUES)]
     return lg.groupby("team", sort=False)["league"].last().to_dict()
 
 
-def latest_ratings(enriched: pd.DataFrame) -> Dict[str, float]:
+def _ratings_of(lg: pd.DataFrame) -> Dict[str, float]:
+    return lg.groupby("team", sort=False)["elo_after"].last().to_dict()
+
+
+class HistoryIndex:
+    """Lazily derived, read-only structures over ONE enriched frame.
+
+    The API caches one per history-cache entry so requests do not rebuild the
+    long-format frame, the known-team set, the league map and the latest
+    ratings. Functions taking ``index=`` use it only when ``index.enriched`` is
+    the very frame they were given (identity check), so an ``as_of``-truncated
+    frame can never pick up structures built from full history (no leakage).
+    Concurrent first accesses may compute a property twice (same result).
+    """
+
+    def __init__(self, enriched: pd.DataFrame) -> None:
+        self.enriched = enriched
+
+    @cached_property
+    def long(self) -> pd.DataFrame:
+        return _long(self.enriched)
+
+    @cached_property
+    def known(self) -> frozenset:
+        if self.enriched.empty:
+            return frozenset()
+        return frozenset(set(self.enriched["home_team"]).union(self.enriched["away_team"]))
+
+    @cached_property
+    def league_map(self) -> Dict[str, str]:
+        return {} if self.enriched.empty else _league_map_of(self.long)
+
+    @cached_property
+    def ratings(self) -> Dict[str, float]:
+        return {} if self.enriched.empty else _ratings_of(self.long)
+
+
+def _index_for(enriched: pd.DataFrame, index: Optional[HistoryIndex]) -> HistoryIndex:
+    return index if index is not None and index.enriched is enriched else HistoryIndex(enriched)
+
+
+def domestic_league_map(enriched: pd.DataFrame, index: Optional[HistoryIndex] = None) -> Dict[str, str]:
+    """team -> league of its latest domestic (non-CL) match."""
+    return _index_for(enriched, index).league_map
+
+
+def latest_ratings(enriched: pd.DataFrame, index: Optional[HistoryIndex] = None) -> Dict[str, float]:
     """team -> rating after its latest match."""
-    if enriched.empty:
-        return {}
-    return _long(enriched).groupby("team", sort=False)["elo_after"].last().to_dict()
+    return _index_for(enriched, index).ratings
 
 
 def latest_domestic_league(tm: pd.DataFrame) -> Optional[str]:
@@ -243,11 +282,11 @@ def resolve_league(table_league: Optional[str], history_league: Optional[str]) -
     return None
 
 
-def team_index(table_rows: Iterable, enriched: pd.DataFrame) -> List[dict]:
+def team_index(table_rows: Iterable, enriched: pd.DataFrame, index: Optional[HistoryIndex] = None) -> List[dict]:
     """All known teams with their league, sorted by league then name (null league last)."""
     table = {name: lg for name, lg in table_rows}
-    hist = domestic_league_map(enriched)
-    names = set(table) | known_teams(enriched)
+    hist = domestic_league_map(enriched, index)
+    names = set(table) | known_teams(enriched, index)
     out = [{"name": n, "league": resolve_league(table.get(n), hist.get(n))} for n in names]
     out.sort(key=lambda t: (t["league"] is None, t["league"] or "", t["name"]))
     return out
@@ -323,26 +362,77 @@ def averages_summary(tm: pd.DataFrame, n: int = AVERAGES_N) -> dict:
     return out
 
 
-def league_rank(enriched: pd.DataFrame, team: str, league: Optional[str]):
-    """``(rank, league_size)`` by current rating among teams whose latest domestic
-    league is ``league`` and that played in that league's most recent season."""
-    if league is None or enriched.empty:
-        return None, None
+def _roster(rows: pd.DataFrame) -> set:
+    return set(rows["home_team"]).union(rows["away_team"])
+
+
+def _table_order(rows: pd.DataFrame) -> List[str]:
+    """Teams of one league-season, best first by (points, goal diff, goals for, name)."""
+    hg, ag = rows["home_goals"].to_numpy(), rows["away_goals"].to_numpy()
+    t = pd.DataFrame({
+        "team": np.concatenate([rows["home_team"].to_numpy(), rows["away_team"].to_numpy()]),
+        "pts": np.concatenate([np.where(hg > ag, 3, np.where(hg == ag, 1, 0)),
+                               np.where(ag > hg, 3, np.where(hg == ag, 1, 0))]),
+        "gd": np.concatenate([hg - ag, ag - hg]),
+        "gf": np.concatenate([hg, ag]),
+    }).groupby("team").sum()
+    return sorted(t.index, key=lambda n: (-t.at[n, "pts"], -t.at[n, "gd"], -t.at[n, "gf"], n))
+
+
+def league_pool(enriched: pd.DataFrame, league: str, index: Optional[HistoryIndex] = None) -> List[str]:
+    """Teams currently in ``league`` (unordered), season-robust.
+
+    ``current`` = teams that played the league's most recent season in
+    ``enriched``. ``reference`` = the most recent EARLIER season whose roster
+    has at least ``elo.MIN_TABLE_TEAMS`` teams (smaller rosters are partial /
+    truncated, as in ``elo.py``). While ``current`` is smaller than
+    ``reference`` (early season, postponed openers), the missing slots are
+    filled with reference-season teams that have not played yet, best previous
+    table position first; the worst ones are left out, as many as promoted
+    sides have already appeared (presumed relegated). Without a reference
+    season the pool is ``current``. Only teams whose latest domestic league is
+    ``league`` are kept.
+    """
+    if enriched.empty:
+        return []
     in_league = enriched.loc[enriched["league"] == league]
     if in_league.empty:
-        return None, 0
-    latest = in_league["season"].max()
-    cur = in_league.loc[in_league["season"] == latest]
-    players = set(cur["home_team"]).union(cur["away_team"])
-    lg_map = domestic_league_map(enriched)
-    ratings = latest_ratings(enriched)
-    pool = sorted((t for t in players if lg_map.get(t) == league), key=lambda t: (-ratings[t], t))
+        return []
+    index = _index_for(enriched, index)
+    lg_map = domestic_league_map(enriched, index)
+    seasons = in_league["season"].to_numpy()
+    latest = seasons.max()
+    current = _roster(in_league.loc[seasons == latest])
+    pool = {t for t in current if lg_map.get(t) == league}
+    for s in sorted(set(seasons[seasons < latest].tolist()), reverse=True):
+        rows = in_league.loc[seasons == s]
+        if len(_roster(rows)) < elo_mod.MIN_TABLE_TEAMS:
+            continue
+        ref_order = _table_order(rows)
+        missing = len(ref_order) - len(current)
+        if missing > 0:
+            waiting = [t for t in ref_order if t not in current and lg_map.get(t) == league]
+            pool.update(waiting[:missing])
+        break
+    return list(pool)
+
+
+def league_rank(enriched: pd.DataFrame, team: str, league: Optional[str],
+                index: Optional[HistoryIndex] = None):
+    """``(rank, league_size)`` by current rating (post-last-match Elo) within
+    :func:`league_pool`; rank is None when the team is not in the pool."""
+    if league is None or enriched.empty:
+        return None, None
+    index = _index_for(enriched, index)            # one set of derived structures per frame
+    ratings = latest_ratings(enriched, index)
+    pool = sorted(league_pool(enriched, league, index), key=lambda t: (-ratings[t], t))
     rank = pool.index(team) + 1 if team in pool else None
     return rank, len(pool)
 
 
-def elo_summary(enriched: pd.DataFrame, tm: pd.DataFrame, team: str, league: Optional[str]) -> dict:
-    rank, size = league_rank(enriched, team, league)
+def elo_summary(enriched: pd.DataFrame, tm: pd.DataFrame, team: str, league: Optional[str],
+                index: Optional[HistoryIndex] = None) -> dict:
+    rank, size = league_rank(enriched, team, league, index)
     if tm.empty:
         return {"rating": None, "rank_in_league": rank, "league_size": size, "change_last_5": None}
     last = tm.tail(FORM_N)
@@ -365,8 +455,14 @@ def build_profile(
     *,
     as_of: Optional[dt.date],
     today: dt.date,
+    index: Optional[HistoryIndex] = None,
 ) -> dict:
-    """``GET /teams/{name}`` body without ``next_fixture`` (strictly before ``as_of``)."""
+    """``GET /teams/{name}`` body without ``next_fixture`` (strictly before ``as_of``).
+
+    ``index`` (built over ``enriched``) is reused only when ``as_of`` is None;
+    with ``as_of`` the truncated frame gets its own structures. ``rest_days``
+    is the true, uncapped day count (the engine's 30-day cap is model input only).
+    """
     hist = before_day(enriched, as_of)
     tm = team_matches(hist, team)
     last_day = pd.Timestamp(tm["day"].iloc[-1]).date() if len(tm) else None
@@ -375,7 +471,7 @@ def build_profile(
         "name": team,
         "league": league,
         "as_of": as_of.isoformat() if as_of else None,
-        "elo": elo_summary(hist, tm, team, league),
+        "elo": elo_summary(hist, tm, team, league, index if as_of is None else None),
         "form": form_summary(tm),
         "season": season_summary(tm),
         "averages": averages_summary(tm),

@@ -42,19 +42,21 @@ def _parse_day(name: str, value: Optional[str]) -> Optional[dt.date]:
         raise HTTPException(status_code=422, detail=f"{name} must be YYYY-MM-DD format")
 
 
-def _load(db: Session) -> Tuple[list, pd.DataFrame]:
-    """``(teams table rows, enriched history)``; DB errors -> 503."""
+def _load(db: Session) -> Tuple[list, pd.DataFrame, team_stats.HistoryIndex]:
+    """``(teams table rows, enriched history, its cached index)``; DB errors -> 503."""
     try:
-        return store.list_teams(db), history_cache.get_enriched(db)
+        rows = store.list_teams(db)
+        index = history_cache.get_index(db)
+        return rows, index.enriched, index
     except SQLAlchemyError as exc:
         logger.error("Team endpoints: database error: %s", exc)
         raise HTTPException(status_code=503, detail=HISTORY_UNAVAILABLE)
 
 
-def _require_team(name: str, table_rows, enriched) -> Optional[str]:
+def _require_team(name: str, table_rows, enriched, index=None) -> Optional[str]:
     """404 unless known; returns the team's ``teams.league`` (or None)."""
     table = dict(table_rows)
-    if name not in table and name not in team_stats.known_teams(enriched):
+    if name not in table and name not in team_stats.known_teams(enriched, index):
         raise HTTPException(status_code=404, detail=f"Team not found: {name}")
     return table.get(name)
 
@@ -70,12 +72,31 @@ def next_fixture(request: Request, db: Session, team: str, league: Optional[str]
     ``"unavailable"`` when ``as_of`` is given, the model or API key is missing,
     or any needed league request failed; ``"none"`` when every source answered
     and no fixture of the team is scheduled. Nothing is persisted (read-only).
+
+    Pipeline outcomes are cached per ``(team, league, model version)`` in
+    ``history_cache`` (``ok`` / ``none`` for ``FIXTURE_TTL_SECONDS``,
+    ``unavailable`` for ``FIXTURE_UNAVAILABLE_TTL_SECONDS``); the cheap
+    ``as_of`` / model / key checks are never cached.
     """
     if as_of is not None:
         return None, "unavailable"
     state = getattr(request.app.state, "model_state", None)
     if state is None or not state.ready or not api_client.get_api_key():
         return None, "unavailable"
+    key = (team, league, state.version)
+    hit = history_cache.fixture_get(key)
+    if hit is not None:
+        return hit
+    gen = history_cache.fixture_generation()
+    result = _compute_next_fixture(state, db, team, league)
+    ttl = (history_cache.FIXTURE_UNAVAILABLE_TTL_SECONDS if result[1] == "unavailable"
+           else history_cache.FIXTURE_TTL_SECONDS)
+    history_cache.fixture_put(key, result, ttl, gen)
+    return result
+
+
+def _compute_next_fixture(state, db: Session, team: str, league: Optional[str]) -> Tuple[Optional[dict], str]:
+    """Runs the /upcoming pipeline (upstream fetch + features + model); never raises."""
     leagues = [league, "CL"] if league else ["CL"]
     try:
         results, failed = upcoming.predict_upcoming(state, db, leagues, team=team, limit=1, persist=False)
@@ -92,8 +113,8 @@ def next_fixture(request: Request, db: Session, team: str, league: Optional[str]
 # Declared before /teams/{name} so "index" is not captured as a team name.
 @router.get("/teams/index")
 def teams_index(db: Session = Depends(get_db)):
-    table_rows, enriched = _load(db)
-    return team_stats.team_index(table_rows, enriched)
+    table_rows, enriched, index = _load(db)
+    return team_stats.team_index(table_rows, enriched, index)
 
 
 @router.get("/teams/{name}")
@@ -104,10 +125,10 @@ def team_profile(
     db: Session = Depends(get_db),
 ):
     as_of_day = _parse_day("as_of", as_of)
-    table_rows, enriched = _load(db)
-    table_league = _require_team(name, table_rows, enriched)
+    table_rows, enriched, index = _load(db)
+    table_league = _require_team(name, table_rows, enriched, index)
     league = _league(name, table_league, team_stats.before_day(enriched, as_of_day))
-    body = team_stats.build_profile(enriched, name, league, as_of=as_of_day, today=today())
+    body = team_stats.build_profile(enriched, name, league, as_of=as_of_day, today=today(), index=index)
     body["next_fixture"], body["next_fixture_status"] = next_fixture(request, db, name, league, as_of_day)
     return body
 
@@ -121,8 +142,8 @@ def team_match_list(
 ):
     if venue not in VENUES:
         raise HTTPException(status_code=422, detail="venue must be one of all, home, away")
-    table_rows, enriched = _load(db)
-    _require_team(name, table_rows, enriched)
+    table_rows, enriched, index = _load(db)
+    _require_team(name, table_rows, enriched, index)
     return team_stats.match_list(team_stats.team_matches(enriched, name), limit=limit, venue=venue)
 
 
@@ -133,8 +154,8 @@ def team_elo_history(
     db: Session = Depends(get_db),
 ):
     since_day = _parse_day("since", since) or (today() - dt.timedelta(days=ELO_HISTORY_DAYS))
-    table_rows, enriched = _load(db)
-    _require_team(name, table_rows, enriched)
+    table_rows, enriched, index = _load(db)
+    _require_team(name, table_rows, enriched, index)
     return {"team": name, "points": team_stats.elo_points(team_stats.team_matches(enriched, name), since_day)}
 
 
@@ -147,7 +168,7 @@ def head_to_head(
 ):
     if a == b:
         raise HTTPException(status_code=422, detail="a and b must differ")
-    table_rows, enriched = _load(db)
-    _require_team(a, table_rows, enriched)
-    _require_team(b, table_rows, enriched)
+    table_rows, enriched, index = _load(db)
+    _require_team(a, table_rows, enriched, index)
+    _require_team(b, table_rows, enriched, index)
     return team_stats.h2h_summary(enriched, a, b, limit=limit)

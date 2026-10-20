@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError
 from src.api import history_cache, model_store, store, team_stats, teams
 from src.api.main import app
 from src.database import DatabaseNotConfigured, get_db
+from src.ingestion import api_client
 from tests.helpers_api import (  # noqa: F401  (fixtures)
     MODEL_VERSION,
     NO_HISTORY_TEAM,
@@ -334,3 +335,116 @@ def test_track_record_team_filter_and_echo(client, harness):
     harness.settled = (0, [])
     empty = client.get("/track-record", params={"team": "Nobody"}).json()
     assert empty["n_settled"] == 0 and empty["team"] == "Nobody" and empty["backtest"] is not None
+
+
+# ---------------------------------------------------------------------------
+# next_fixture cache and cached history index
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def pipeline_calls(monkeypatch):
+    """Counts /upcoming pipeline runs and drives the cache clock."""
+    from src.api import upcoming
+
+    calls, clock = [], [5000.0]
+    real = upcoming.predict_upcoming
+    monkeypatch.setattr(upcoming, "predict_upcoming", lambda *a, **k: calls.append(k.get("team")) or real(*a, **k))
+    monkeypatch.setattr(history_cache, "_now", lambda: clock[0])
+    return calls, clock
+
+
+def test_next_fixture_cached_per_team(client, harness, pipeline_calls):
+    calls, clock = pipeline_calls
+    harness.upstream["PL"] = fx_payload((202, B, A, soon(5), "TIMED"))
+    first = client.get(f"/teams/{quote(A)}").json()
+    second = client.get(f"/teams/{quote(A)}").json()
+    assert first["next_fixture_status"] == second["next_fixture_status"] == "ok"
+    assert first["next_fixture"] == second["next_fixture"]
+    assert calls == [A]                                   # second profile: no pipeline run
+    client.get(f"/teams/{quote(B)}")                      # keyed by team
+    assert calls == [A, B]
+    # as_of is never cached and never runs the pipeline
+    assert client.get(f"/teams/{quote(A)}?as_of=2025-01-01").json()["next_fixture_status"] == "unavailable"
+    assert calls == [A, B]
+
+
+def test_next_fixture_cache_ttl_and_invalidate(client, harness, pipeline_calls):
+    calls, clock = pipeline_calls
+    harness.upstream["PL"] = fx_payload((202, B, A, soon(5), "TIMED"))
+    client.get(f"/teams/{quote(A)}")
+    clock[0] += history_cache.FIXTURE_TTL_SECONDS - 1
+    client.get(f"/teams/{quote(A)}")
+    assert len(calls) == 1
+    clock[0] += 2                                         # expired
+    client.get(f"/teams/{quote(A)}")
+    assert len(calls) == 2
+    history_cache.invalidate()                            # cleared together with the history
+    client.get(f"/teams/{quote(A)}")
+    assert len(calls) == 3
+
+
+def test_next_fixture_unavailable_cached_briefly_then_recovers(client, harness, pipeline_calls):
+    calls, clock = pipeline_calls
+    harness.upstream["PL"] = RuntimeError("down")
+    assert client.get(f"/teams/{quote(A)}").json()["next_fixture_status"] == "unavailable"
+    harness.upstream["PL"] = fx_payload((202, B, A, soon(5), "TIMED"))
+    api_client.clear_cache()                              # upstream responses are cached too
+    clock[0] += history_cache.FIXTURE_UNAVAILABLE_TTL_SECONDS - 1
+    assert client.get(f"/teams/{quote(A)}").json()["next_fixture_status"] == "unavailable"
+    assert len(calls) == 1
+    clock[0] += 2                                         # short TTL elapsed: upstream retried
+    assert client.get(f"/teams/{quote(A)}").json()["next_fixture_status"] == "ok"
+    assert len(calls) == 2
+    assert history_cache.FIXTURE_UNAVAILABLE_TTL_SECONDS < history_cache.FIXTURE_TTL_SECONDS
+
+
+def test_next_fixture_cheap_unavailable_paths_not_cached(client, harness, monkeypatch, pipeline_calls):
+    calls, _ = pipeline_calls
+    harness.upstream["PL"] = fx_payload((202, B, A, soon(5), "TIMED"))
+    monkeypatch.delenv("FOOTBALL_DATA_API_KEY")
+    assert client.get(f"/teams/{quote(A)}").json()["next_fixture_status"] == "unavailable"
+    monkeypatch.setenv("FOOTBALL_DATA_API_KEY", "test-key")
+    assert client.get(f"/teams/{quote(A)}").json()["next_fixture_status"] == "ok"
+    assert calls == [A]
+
+
+def test_cached_payload_is_not_shared_mutable(client, harness, pipeline_calls):
+    harness.upstream["PL"] = fx_payload((202, B, A, soon(5), "TIMED"))
+    client.get(f"/teams/{quote(A)}")
+    key = next(iter(history_cache._fixtures))
+    got = history_cache.fixture_get(key)
+    got[0]["home_team"] = "mutated"
+    assert history_cache.fixture_get(key)[0]["home_team"] == B
+
+
+def test_history_index_built_once_per_history_entry(client, harness, monkeypatch):
+    calls = []
+    real = team_stats._long
+    monkeypatch.setattr(team_stats, "_long", lambda e: calls.append(1) or real(e))
+    history_cache.invalidate()
+    for _ in range(3):
+        client.get(f"/teams/{quote(A)}")
+        client.get("/teams/index")
+    assert len(calls) == 1
+    history_cache.invalidate()
+    client.get(f"/teams/{quote(A)}")
+    assert len(calls) == 2
+
+
+def test_profile_as_of_rank_ignores_cached_full_history_index(client, harness):
+    as_of = "2025-01-01"
+    client.get(f"/teams/{quote(A)}")                      # warm the full-history index
+    cached = client.get(f"/teams/{quote(A)}?as_of={as_of}").json()["elo"]
+    hist = harness.history
+    truncated = hist.loc[pd.to_datetime(hist["date"]).dt.normalize() < pd.Timestamp(as_of)]
+    enr = team_stats.replay_elo(truncated)
+    tm = team_stats.team_matches(enr, A)
+    expected = team_stats.elo_summary(enr, tm, A, "PL")
+    assert cached == expected
+    full = client.get(f"/teams/{quote(A)}").json()["elo"]
+    assert full["rating"] != cached["rating"]
+
+
+def test_profile_rest_days_uncapped(client, harness, monkeypatch):
+    last = dt.date.fromisoformat(client.get(f"/teams/{quote(A)}").json()["last_match_date"])
+    monkeypatch.setattr(teams, "today", lambda: last + dt.timedelta(days=90))
+    assert client.get(f"/teams/{quote(A)}").json()["rest_days"] == 90
