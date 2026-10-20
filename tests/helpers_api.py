@@ -14,7 +14,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-from src.api import store
+from src.api import history_cache, store
 from src.api.main import app
 from src.database import get_db
 from src.features.columns import FEATURE_COLS
@@ -111,7 +111,9 @@ class ApiHarness:
         self.persist_error = None
         self.db_status = "ok"
         self.settled = (0, [])
+        self.settled_kwargs = []      # kwargs of each fetch_settled call
         self.class_counts = None
+        self.team_rows = None         # teams table (name, league); None -> team_names in PL
 
 
 @pytest.fixture
@@ -132,7 +134,15 @@ def harness(api_env, monkeypatch):
     monkeypatch.setattr(store, "load_history", lambda db: h.history.copy())
     monkeypatch.setattr(store, "list_team_names", lambda db: list(h.team_names))
     monkeypatch.setattr(store, "ping_db", lambda timeout=2.0: h.db_status)
-    monkeypatch.setattr(store, "fetch_settled", lambda db, **kw: h.settled)
+    def fetch_settled(db, **kw):
+        h.settled_kwargs.append(kw)
+        return h.settled
+
+    monkeypatch.setattr(store, "fetch_settled", fetch_settled)
+    monkeypatch.setattr(
+        store, "list_teams",
+        lambda db: list(h.team_rows) if h.team_rows is not None else [(n, "PL") for n in h.team_names],
+    )
     monkeypatch.setattr(store, "class_counts_before", lambda db, day, league=None: h.class_counts)
 
     def persist(db, rows, model_version, now=None):
@@ -152,7 +162,9 @@ def harness(api_env, monkeypatch):
         return out
 
     monkeypatch.setattr(api_client, "_get", fake_get)
-    return h
+    history_cache.invalidate()        # the history cache is process-wide (300 s TTL)
+    yield h
+    history_cache.invalidate()
 
 
 @pytest.fixture

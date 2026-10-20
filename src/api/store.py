@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from typing import List, Optional, Sequence, Tuple
 
 import pandas as pd
-from sqlalchemy import and_, text
+from sqlalchemy import and_, or_, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,11 @@ def load_history(db: Session) -> pd.DataFrame:
 
 def list_team_names(db: Session) -> List[str]:
     return [name for (name,) in db.query(Team.name).order_by(Team.name).all()]
+
+
+def list_teams(db: Session) -> List[Tuple[str, Optional[str]]]:
+    """``(name, league)`` for every row of the teams table, by name."""
+    return [(name, league) for name, league in db.query(Team.name, Team.league).order_by(Team.name).all()]
 
 
 def persist_predictions(
@@ -103,13 +108,15 @@ def fetch_settled(
     league: Optional[str],
     weeks: int,
     model_version: Optional[str],
+    team: Optional[str] = None,
     now: Optional[dt.datetime] = None,
 ) -> Tuple[int, List[dict]]:
     """``(n_predictions, settled_rows)`` for predictions with kickoff in the window.
 
     A prediction is settled when the matches table holds a result for the same
     natural key (league, match_day, home_team, away_team) AND the prediction was
-    last written strictly before kickoff.
+    last written strictly before kickoff. ``team`` keeps only predictions
+    where it is the home or the away side.
     """
     now = now or utcnow()
     cutoff = now - dt.timedelta(weeks=weeks)
@@ -130,6 +137,8 @@ def fetch_settled(
         q = q.filter(Prediction.league == league)
     if model_version:
         q = q.filter(Prediction.model_version == model_version)
+    if team is not None:
+        q = q.filter(or_(Prediction.home_team == team, Prediction.away_team == team))
     fetched = q.all()
 
     settled: List[dict] = []

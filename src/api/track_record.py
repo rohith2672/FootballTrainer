@@ -72,6 +72,7 @@ def compute_track_record(
     class_counts: Optional[Sequence[int]],
     model_version: Optional[str],
     registry: Optional[dict],
+    team: Optional[str] = None,
 ) -> dict:
     """Assemble the /track-record payload.
 
@@ -79,9 +80,11 @@ def compute_track_record(
     home_team, away_team, home_win, draw, away_win and result H/D/A).
     ``class_counts`` are H/D/A counts of
     matches played before the prediction window (None/empty -> no class_prior).
+    ``team`` is echoed (the rows are expected to be filtered to it already).
     """
     out: dict = {
         "model_version": model_version,
+        "team": team,
         "n_predictions": int(n_predictions),
         "n_settled": len(rows),
         "overall": {"log_loss": None, "accuracy": None, "brier": None},

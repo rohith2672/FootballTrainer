@@ -7,9 +7,8 @@ prediction endpoints answer 503 until a valid model is available.
 import datetime as dt
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +19,8 @@ from sqlalchemy.orm import Session
 from src.api import model_store, serving, store
 from src.api import track_record as tr
 from src.api.news import router as news_router
+from src.api.teams import router as teams_router
+from src.api.upcoming import fetch_upstream_fixtures, fixture_payload, predict_upcoming  # noqa: F401
 from src.database import DatabaseNotConfigured, get_db
 from src.features.columns import LEAGUES
 from src.ingestion import api_client
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Football Match Predictor", version=API_VERSION, lifespan=lifespan)
 app.include_router(news_router)
+app.include_router(teams_router)
 
 
 def cors_origins() -> List[str]:
@@ -235,25 +237,6 @@ def _parse_day(name: str, value: Optional[str]) -> Optional[dt.date]:
         raise HTTPException(status_code=422, detail=f"{name} must be YYYY-MM-DD format")
 
 
-def fetch_upstream_fixtures(leagues: List[str]) -> tuple:
-    """Fetch the leagues concurrently (cached). Returns ``(payloads, failed)``."""
-    payloads: Dict[str, dict] = {}
-    failed: List[str] = []
-
-    def one(code: str):
-        return code, api_client.get_upcoming_matches_cached(code)
-
-    with ThreadPoolExecutor(max_workers=max(1, len(leagues))) as pool:
-        futures = {code: pool.submit(one, code) for code in leagues}
-        for code, fut in futures.items():
-            try:
-                payloads[code] = fut.result()[1]
-            except Exception as exc:
-                logger.error("Failed to fetch upcoming matches for %s: %s", code, exc)
-                failed.append(code)
-    return payloads, failed
-
-
 @app.get("/upcoming", response_model=List[UpcomingMatchResponse])
 def get_upcoming(
     request: Request,
@@ -261,6 +244,7 @@ def get_upcoming(
     league: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    team: Optional[str] = Query(None),
     limit: int = Query(500, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
@@ -272,44 +256,14 @@ def get_upcoming(
         raise HTTPException(status_code=503, detail=NO_SOURCE_DETAIL)
 
     leagues = [league] if league else list(LEAGUES)
-    payloads, failed = fetch_upstream_fixtures(leagues)
+    results, failed = predict_upcoming(
+        state, db, leagues, team=team, day_from=day_from, day_to=day_to, limit=limit,
+    )
     if len(failed) == len(leagues):
         raise HTTPException(status_code=503, detail="Fixture source unavailable (all league requests failed)")
     if failed:
         response.headers["X-Partial-Failure"] = ",".join(c for c in leagues if c in failed)
-
-    fixtures = serving.parse_fixtures(payloads)
-    if day_from:
-        fixtures = [f for f in fixtures if f["kickoff"].date() >= day_from]
-    if day_to:
-        fixtures = [f for f in fixtures if f["kickoff"].date() <= day_to]
-    fixtures = fixtures[:limit]
-    if not fixtures:
-        return []
-
-    history = store.load_history(db)             # one query for all fixtures
-    results = serving.predict_fixtures(state.model, history, fixtures)
-
-    now = store.utcnow()
-    to_store = [r for r in results if r["prediction_available"] and now < r["kickoff"]]
-    if to_store:
-        try:
-            store.persist_predictions(db, to_store, state.version, now)
-        except Exception:
-            logger.exception("Persisting predictions failed; continuing")
-
-    return [
-        UpcomingMatchResponse(
-            fixture_id=r["fixture_id"], league=r["league"],
-            home_team=r["home_team"], away_team=r["away_team"],
-            date=r["kickoff"].date().isoformat(), kickoff=serving.utc_iso(r["kickoff"]),
-            home_win=r["home_win"], draw=r["draw"], away_win=r["away_win"],
-            prediction_available=r["prediction_available"], is_fallback=r["is_fallback"],
-            reason=r["reason"], model_version=state.version,
-            top_factors=r["top_factors"], details=r["details"],
-        )
-        for r in results
-    ]
+    return [UpcomingMatchResponse(**fixture_payload(r, state.version)) for r in results]
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +274,7 @@ def track_record(
     request: Request,
     league: Optional[str] = Query(None),
     weeks: int = Query(26, ge=1, le=520),
+    team: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     if league is not None and league not in LEAGUES:
@@ -327,7 +282,9 @@ def track_record(
     state = _state(request)
     version = state.version if state.ready else None
 
-    n_predictions, rows = store.fetch_settled(db, league=league, weeks=weeks, model_version=version)
+    n_predictions, rows = store.fetch_settled(
+        db, league=league, weeks=weeks, model_version=version, team=team
+    )
     counts = None
     if rows:
         start = min(r["kickoff"] for r in rows).date()
@@ -338,4 +295,5 @@ def track_record(
         class_counts=counts,
         model_version=version,
         registry=state.registry,
+        team=team,
     )

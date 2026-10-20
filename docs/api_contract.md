@@ -171,9 +171,10 @@ is unchanged (flat, alphabetically sorted `str[]`).
 [{"name": "Arsenal FC", "league": "PL"}, {"name": "Celtic FC", "league": null}]
 ```
 
-`league` is the team's latest domestic league (`teams.league`, else inferred
-from history like `serving.infer_league`); `null` when the team only has CL
-matches.
+`league` is the team's latest domestic league (`teams.league` when it is a
+domestic code, else the league of its latest domestic match in history);
+`null` when the team only has CL matches (CL-only rows in `teams` carry
+`league = "CL"`, which is reported as `null`).
 
 ### `GET /teams/{name}`
 
@@ -208,7 +209,8 @@ before it. Default: all finished matches (all are before "now").
 - `elo.rating`: rating after the team's last match. `rank_in_league` /
   `league_size`: rank (1 = highest) among teams whose latest domestic league is
   `league` and that played in that league's most recent season in history;
-  both `null` when `league` is null. `change_last_5` = `elo_after` of the latest
+  both `null` when `league` is null; `rank_in_league` alone is `null` when the
+  team is not in that pool (e.g. it did not play that season). `change_last_5` = `elo_after` of the latest
   match − `elo_before` of the 5th latest (fewer if fewer matches); `null` with
   no matches.
 - `form` and `averages` span all competitions (as the engine's form does).
@@ -225,9 +227,10 @@ before it. Default: all finished matches (all are before "now").
 - `next_fixture`: the team's next `/upcoming` item (same `Fixture` shape incl.
   probabilities, `top_factors`, `details`), from its domestic league and CL.
   `next_fixture_status`: `"ok"` (fixture present), `"none"` (source reachable,
-  no fixture scheduled), `"unavailable"` (API key missing, upstream failure,
-  model not loaded, or `as_of` given — then `next_fixture` is always null).
-  These conditions never fail the profile. Matching relies on upstream names
+  no fixture scheduled), `"unavailable"` (API key missing, any needed league
+  request failed, model not loaded, or `as_of` given — then `next_fixture` is
+  always null). These conditions never fail the profile, and the profile does
+  not store the prediction (unlike `/upcoming`). Matching relies on upstream names
   equalling canonical DB names, as in `/upcoming`.
 
 ### `GET /teams/{name}/matches`
