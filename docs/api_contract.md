@@ -136,3 +136,168 @@ Query params: `league` (optional), `weeks` (default 26).
 
 `status` is `"degraded"` (HTTP 200) when the DB is unreachable, and HTTP 503 when
 no model is loaded.
+
+## Team analysis (added 2026-10-20)
+
+Read-only endpoints over finished matches. They need only the database: no model
+and no fixture API key (except `next_fixture`, see below). Common rules:
+
+- **Known team** = a name in the `teams` table or in finished-match history
+  (CL-only sides may exist only in history). Names are exact canonical names,
+  case-sensitive; clients must `encodeURIComponent` them in paths and queries
+  (names contain spaces, `&`, `.`). Unknown name → `404 {"detail": "Team not found: <name>"}`.
+- DB missing/unreachable → `503 {"detail": "..."}`. Bad params → `422`
+  (dates must be `YYYY-MM-DD`; out-of-range ints use FastAPI's 422).
+- Dates are UTC calendar days (`match_day`), `YYYY-MM-DD`. `season` is the
+  season start year. Elo values are rounded to 1 decimal, rates/averages to 3.
+- **Elo** is computed by replaying `src/features/elo.py` over full history
+  exactly as the feature engine does (all competitions incl. CL share one
+  rating; K=20, home advantage 60, goal-difference multiplier, 25% regression to
+  the league mean at a team's first match of a new season, results applied
+  per day). Ratings are therefore identical to those the model sees.
+  Consequences: a team's first-match-of-season `elo_before` differs from the
+  previous match's `elo_after` (season regression); the profile's
+  `elo.rating` is the post-last-match value and can differ from `/upcoming`
+  `details.*.elo`, which includes pending regression.
+- Route order: `/teams/index` is declared before `/teams/{name}`, so `index` is
+  a reserved name.
+
+### `GET /teams/index`
+
+All known teams, sorted by league then name (null league last). `GET /teams`
+is unchanged (flat, alphabetically sorted `str[]`).
+
+```json
+[{"name": "Arsenal FC", "league": "PL"}, {"name": "Celtic FC", "league": null}]
+```
+
+`league` is the team's latest domestic league (`teams.league`, else inferred
+from history like `serving.infer_league`); `null` when the team only has CL
+matches.
+
+### `GET /teams/{name}`
+
+Query `as_of` (optional, YYYY-MM-DD): use only matches with match day strictly
+before it. Default: all finished matches (all are before "now").
+
+```json
+{
+  "name": "Arsenal FC",
+  "league": "PL",
+  "as_of": null,
+  "elo": {"rating": 1712.3, "rank_in_league": 2, "league_size": 20, "change_last_5": 14.6},
+  "form": {"last5": "WDLWW", "pts_pg": 2.0, "n": 5},
+  "season": {
+    "season": 2026, "played": 8, "w": 5, "d": 2, "l": 1, "gf": 16, "ga": 6, "pts": 17,
+    "home": {"played": 4, "w": 3, "d": 1, "l": 0, "gf": 10, "ga": 2},
+    "away": {"played": 4, "w": 2, "d": 1, "l": 1, "gf": 6, "ga": 4}
+  },
+  "averages": {
+    "n": 10, "n_shots": 8,
+    "goals_for": 1.9, "goals_against": 0.8, "shots_for": 15.2, "shots_against": 9.1,
+    "sot_for": 5.6, "sot_against": 3.0,
+    "clean_sheet_rate": 0.4, "btts_rate": 0.4, "over25_rate": 0.5
+  },
+  "rest_days": 4,
+  "last_match_date": "2026-10-16",
+  "next_fixture": null,
+  "next_fixture_status": "unavailable"
+}
+```
+
+- `elo.rating`: rating after the team's last match. `rank_in_league` /
+  `league_size`: rank (1 = highest) among teams whose latest domestic league is
+  `league` and that played in that league's most recent season in history;
+  both `null` when `league` is null. `change_last_5` = `elo_after` of the latest
+  match − `elo_before` of the 5th latest (fewer if fewer matches); `null` with
+  no matches.
+- `form` and `averages` span all competitions (as the engine's form does).
+  `form.last5` is newest-last, chars `W`/`D`/`L`, up to 5 chars; `pts_pg` is
+  `null` and `last5` `""` when `n` is 0.
+- `averages` cover the last 10 matches (`n` ≤ 10). Shot fields use only the
+  `n_shots` of those matches that have shot data (CL rows lack shots) and are
+  `null` when `n_shots` is 0; every average/rate is `null` when `n` is 0.
+  `btts_rate` = both scored; `over25_rate` = total goals ≥ 3.
+- `season` is domestic league only (CL excluded), for the season of the team's
+  latest domestic match; `null` for CL-only teams.
+- `rest_days`: days from `last_match_date` to today (or to `as_of`); both
+  `null` without matches.
+- `next_fixture`: the team's next `/upcoming` item (same `Fixture` shape incl.
+  probabilities, `top_factors`, `details`), from its domestic league and CL.
+  `next_fixture_status`: `"ok"` (fixture present), `"none"` (source reachable,
+  no fixture scheduled), `"unavailable"` (API key missing, upstream failure,
+  model not loaded, or `as_of` given — then `next_fixture` is always null).
+  These conditions never fail the profile. Matching relies on upstream names
+  equalling canonical DB names, as in `/upcoming`.
+
+### `GET /teams/{name}/matches`
+
+Query `limit` (default 20, 1–100), `venue` (`all`|`home`|`away`, default `all`;
+other values → 422). Newest first; all competitions.
+
+```json
+[
+  {"date": "2026-10-16", "league": "PL", "season": 2026, "venue": "home",
+   "opponent": "Chelsea FC", "gf": 2, "ga": 1, "result": "W",
+   "shots_for": 14, "shots_against": 9, "sot_for": 6, "sot_against": 3,
+   "elo_before": 1705.1, "elo_after": 1712.3}
+]
+```
+
+Shot fields are `null` when missing. `result` is from the team's perspective.
+No matches → `[]`.
+
+### `GET /teams/{name}/elo-history`
+
+Query `since` (optional, YYYY-MM-DD; default today − 365 days). One point per
+finished match on/after `since`, post-match rating, ascending by date.
+
+```json
+{"team": "Arsenal FC",
+ "points": [{"date": "2026-10-16", "elo": 1712.3, "opponent": "Chelsea FC", "result": "W"}]}
+```
+
+No matches in the window → `points: []`.
+
+### `GET /h2h`
+
+Query `a`, `b` (required; missing → 422), `limit` (default 10, 1–100). Both
+must be known teams (404 otherwise); `a == b` → `422 {"detail": "a and b must differ"}`.
+
+```json
+{"a": "Arsenal FC", "b": "Chelsea FC", "n": 21,
+ "a_wins": 9, "draws": 6, "b_wins": 6, "a_goals": 31, "b_goals": 24,
+ "meetings": [{"date": "2026-10-16", "league": "PL", "home_team": "Arsenal FC",
+               "away_team": "Chelsea FC", "home_goals": 2, "away_goals": 1}]}
+```
+
+Totals (`n`, wins, draws, goals) cover **all** finished meetings in history, any
+venue and competition; `meetings` is the newest `limit` of them, newest first.
+No meetings → `n: 0`, counts 0, `meetings: []`.
+
+### `team` filter on `/upcoming` and `/track-record`
+
+- `GET /upcoming?team=<name>`: only fixtures where `home_team` or `away_team`
+  equals `team`. Applied before `limit`. Combines with `league` and dates.
+- `GET /track-record?team=<name>`: only stored predictions where home or away
+  equals `team`; `n_predictions`, `n_settled`, `overall`, `by_league`,
+  `timeline` and `recent` are all filtered. `backtest` is unchanged, and the
+  live `class_prior` baseline keeps its league/global class counts (scored on
+  the filtered rows). The response gains `"team": "<name>"` (`null` when not
+  filtered).
+- On filters an unknown name is not an error: it yields `[]` / `n_settled: 0`
+  (fixture names can exist without history).
+
+### Caching
+
+Finished-match history is cached in-process with a short TTL (300 s) and shared
+by `/upcoming`, the team endpoints and `/h2h`; the derived Elo replay is cached
+with it and rebuilt when it expires. Newly ingested results appear within one
+TTL. Upstream fixtures keep their existing `api_client` cache.
+
+### Client-side favourites
+
+Favourite teams live only in browser `localStorage` under `ft.favourites.v1`:
+`{"teams": ["Arsenal FC"], "primary": "Arsenal FC"}` (`primary`: `str|null`,
+one of `teams`). There is no server endpoint; reads/writes must tolerate a
+missing or throwing storage.
