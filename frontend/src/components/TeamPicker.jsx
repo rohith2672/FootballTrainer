@@ -30,7 +30,7 @@ function YourTeams({ favourites, onNavigate }) {
               {name}
             </a>
             {name === primary ? (
-              <span className="primary-tag">
+              <span className="tp-primary-tag">
                 <span aria-hidden="true">★ </span>Primary
               </span>
             ) : (

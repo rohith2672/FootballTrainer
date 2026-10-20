@@ -15,12 +15,12 @@ import { Card, ResultChip, SectionNotice, Skeleton, TeamLink } from './common';
 
 function VenueFilter({ venue, onChange, disabled }) {
   return (
-    <div className="segmented" role="group" aria-label="Venue">
+    <div className="tp-segmented" role="group" aria-label="Venue">
       {VENUE_OPTIONS.map((o) => (
         <button
           key={o.value}
           type="button"
-          className={`segmented-btn ${venue === o.value ? 'active' : ''}`}
+          className={`tp-segmented-btn ${venue === o.value ? 'active' : ''}`}
           aria-pressed={venue === o.value}
           onClick={() => onChange(o.value)}
           disabled={disabled && venue !== o.value}
@@ -81,7 +81,7 @@ function RecentMatches({ matches, error, venue, onVenueChange, limit, onShowMore
   } else if (!rows) {
     body = <Skeleton lines={6} />;
   } else if (!rows.length) {
-    body = <p className="muted">No{venueText} matches on record.</p>;
+    body = <p className="tp-muted">No{venueText} matches on record.</p>;
   } else {
     body = (
       <>

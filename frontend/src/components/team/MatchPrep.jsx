@@ -63,9 +63,9 @@ function HeadToHead({ team, opponent }) {
   let body;
   if (error) {
     body = isTeamNotFound(error) ? (
-      <p className="muted">No match history on record for {opponent}, so there is no head-to-head.</p>
+      <p className="tp-muted">No match history on record for {opponent}, so there is no head-to-head.</p>
     ) : (
-      <p className="muted">
+      <p className="tp-muted">
         Head-to-head record unavailable right now.{' '}
         <button type="button" className="link-btn" onClick={reload}>Retry</button>
       </p>

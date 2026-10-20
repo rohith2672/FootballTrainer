@@ -10,7 +10,7 @@ function SeasonCard({ season, league }) {
   if (!season || typeof season !== 'object') {
     return (
       <Card title="This season">
-        <p className="muted">
+        <p className="tp-muted">
           No domestic league season on record — this team only appears in Champions League history.
         </p>
       </Card>

@@ -62,7 +62,7 @@ export function ResultChip({ result }) {
 /** Last-five form as lettered dots, oldest first, with a spoken summary. */
 export function FormDots({ last5 }) {
   const dots = formDots(last5);
-  if (!dots.length) return <span className="muted">No recent matches</span>;
+  if (!dots.length) return <span className="tp-muted">No recent matches</span>;
   return (
     <ol className="form-dots" aria-label={formSummary(last5)}>
       {dots.map((d, i) => (
@@ -78,7 +78,7 @@ export function FormDots({ last5 }) {
 export function TeamLink({ name, className = '', children }) {
   if (!name) return <span className={className}>{children ?? 'Unknown'}</span>;
   return (
-    <a className={`team-link ${className}`.trim()} href={teamHref(name)}>
+    <a className={`tp-team-link ${className}`.trim()} href={teamHref(name)}>
       {children ?? name}
     </a>
   );

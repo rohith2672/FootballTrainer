@@ -9,7 +9,7 @@ function AveragesCard({ averages }) {
   if (!n) {
     return (
       <Card title={title}>
-        <p className="muted">No finished matches yet, so there is nothing to average.</p>
+        <p className="tp-muted">No finished matches yet, so there is nothing to average.</p>
       </Card>
     );
   }

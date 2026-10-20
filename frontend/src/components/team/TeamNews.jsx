@@ -18,9 +18,9 @@ function TeamNews({ name }) {
   if (!data && loading) {
     body = <Skeleton lines={3} />;
   } else if (!data && error) {
-    body = <p className="muted">Headlines are unavailable right now.</p>;
+    body = <p className="tp-muted">Headlines are unavailable right now.</p>;
   } else if (!articles.length) {
-    body = <p className="muted">No recent headlines mention {name}.</p>;
+    body = <p className="tp-muted">No recent headlines mention {name}.</p>;
   } else {
     body = (
       <ul className="team-news">

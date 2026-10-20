@@ -71,4 +71,9 @@
 .lc-marker.result-L { fill: var(--away); }
 .lc-marker.result-none { fill: var(--series-model); }
 
+/* 44px touch target for the data-table disclosure. */
+.lc .chart-data summary {
+  min-height: 44px;
+}
+
 .series-line.elo { stroke: var(--series-model); stroke-width: 2; opacity: 0.85; }

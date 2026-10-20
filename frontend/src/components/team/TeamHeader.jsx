@@ -18,7 +18,7 @@ function Stat({ label, value, note }) {
 function PrimaryControl({ name, favourites }) {
   if (favourites.primary === name) {
     return (
-      <span className="primary-tag">
+      <span className="tp-primary-tag">
         <span aria-hidden="true">★ </span>Your primary team
       </span>
     );

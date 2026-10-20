@@ -42,47 +42,47 @@ function MyTeamsMenu({ currentTeam, onOpenPicker }) {
   };
 
   return (
-    <div className="my-teams" ref={rootRef} onKeyDown={onKeyDown}>
+    <div className="nav-teams" ref={rootRef} onKeyDown={onKeyDown}>
       <button
         ref={buttonRef}
         type="button"
-        className={`nav-tab my-teams-btn ${active ? 'active' : ''}`}
+        className={`nav-tab nav-teams-btn ${active ? 'active' : ''}`}
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((o) => !o)}
       >
         My teams
         {teams.length ? (
-          <span className="my-teams-count">
+          <span className="nav-teams-count">
             {teams.length}
             <span className="sr-only"> {teams.length === 1 ? 'favourite' : 'favourites'}</span>
           </span>
         ) : null}
-        <span className="my-teams-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
+        <span className="nav-teams-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </button>
-      <div id={menuId} className="my-teams-menu" hidden={!open}>
+      <div id={menuId} className="nav-teams-menu" hidden={!open}>
         {ordered.length ? (
-          <ul className="my-teams-list" aria-label="Favourite teams">
+          <ul className="nav-teams-list" aria-label="Favourite teams">
             {ordered.map((name) => (
               <li key={name}>
                 <a
                   href={teamHref(name)}
-                  className="my-teams-link"
+                  className="nav-teams-link"
                   aria-current={name === currentTeam ? 'page' : undefined}
                   onClick={() => setOpen(false)}
                 >
-                  <span className="my-teams-name">{name}</span>
-                  {name === primary ? <span className="primary-tag small">Primary</span> : null}
+                  <span className="nav-teams-name">{name}</span>
+                  {name === primary ? <span className="tp-primary-tag small">Primary</span> : null}
                 </a>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="my-teams-empty">No favourite teams yet.</p>
+          <p className="nav-teams-empty">No favourite teams yet.</p>
         )}
         <button
           type="button"
-          className="btn btn-small my-teams-choose"
+          className="btn btn-small nav-teams-choose"
           onClick={() => {
             setOpen(false);
             // The picker returns focus to whatever was focused when it opened;

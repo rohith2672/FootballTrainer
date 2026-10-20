@@ -66,7 +66,7 @@ function EloHistoryCard({ name, eloHistory, error, onRetry, busy }) {
   } else if (!eloHistory) {
     body = <Skeleton lines={5} tall />;
   } else if (!points.length) {
-    body = <p className="muted">No finished matches in the last 12 months.</p>;
+    body = <p className="tp-muted">No finished matches in the last 12 months.</p>;
   } else {
     const desc =
       `Line chart of ${name}’s Elo rating after each match from ${fmtDate(points[0].date)} to ` +
