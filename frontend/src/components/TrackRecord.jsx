@@ -8,12 +8,10 @@ import {
   DEFAULT_WEEKS,
   WEEK_OPTIONS,
   baselineLabel,
-  fmtGap,
   fmtLogLoss,
   fmtLongDate,
   fmtPct0,
   fmtPercent,
-  gapOf,
   normalizeTrackRecord,
   predictedCode,
   resultLabel,
@@ -33,7 +31,6 @@ function Tile({ label, value, note, wide = false }) {
 
 function Headline({ record }) {
   const { overall, baselines, nSettled, nPredictions, modelVersion } = record;
-  const gap = gapOf(overall.logLoss, baselines.bookmaker.logLoss);
   return (
     <section className="tr-section" aria-labelledby="tr-headline">
       <h2 id="tr-headline" className="tr-heading">Live performance</h2>
@@ -44,18 +41,14 @@ function Headline({ record }) {
       <div className="metric-grid">
         <Tile label="Model log-loss" value={fmtLogLoss(overall.logLoss)} note="Lower is better" />
         <Tile
-          label="Bookmaker log-loss"
-          value={fmtLogLoss(baselines.bookmaker.logLoss)}
-          note={
-            baselines.bookmaker.n != null
-              ? `${plural(baselines.bookmaker.n, 'match')} with odds · lower is better`
-              : 'Lower is better'
-          }
-        />
-        <Tile
           label="Class-prior log-loss"
           value={fmtLogLoss(baselines.classPrior.logLoss)}
           note="Always predicting base rates · lower is better"
+        />
+        <Tile
+          label="Uniform log-loss"
+          value={fmtLogLoss(baselines.uniform.logLoss)}
+          note="1/3 for each outcome · lower is better"
         />
         <Tile label="Accuracy" value={fmtPercent(overall.accuracy)} note="Share of results called correctly" />
         <Tile
@@ -66,8 +59,7 @@ function Headline({ record }) {
         <Tile label="Model version" value={modelVersion ?? DASH} wide />
       </div>
       <p className="tr-note">
-        Gap to bookmaker (model − bookmaker): <strong>{fmtGap(gap)}</strong>
-        {gap === null ? '' : ' — negative means the model’s log-loss is lower than the bookmaker’s.'}
+        Class prior and uniform are simple yardsticks: a useful model should score below both.
       </p>
     </section>
   );
@@ -86,10 +78,6 @@ function LeagueTable({ rows }) {
               <th scope="col" className="num">Settled</th>
               <th scope="col" className="num">Accuracy</th>
               <th scope="col" className="num">Model log-loss</th>
-              <th scope="col" className="num">Bookmaker log-loss</th>
-              <th scope="col" className="num" title="Model minus bookmaker; negative means the model is lower">
-                Gap
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -99,14 +87,11 @@ function LeagueTable({ rows }) {
                 <td className="num">{r.n}</td>
                 <td className="num">{fmtPercent(r.accuracy)}</td>
                 <td className="num">{fmtLogLoss(r.logLoss)}</td>
-                <td className="num">{fmtLogLoss(r.bookmakerLogLoss)}</td>
-                <td className="num">{fmtGap(gapOf(r.logLoss, r.bookmakerLogLoss))}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="tr-note">Gap = model log-loss − bookmaker log-loss. Negative: the model was lower (better).</p>
     </section>
   );
 }

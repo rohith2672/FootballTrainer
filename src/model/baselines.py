@@ -2,8 +2,11 @@
 
 A baseline is a function ``(train_df, eval_df) -> np.ndarray`` of shape
 ``(len(eval_df), 3)`` giving probabilities for (home, draw, away). Rows the
-baseline cannot score (for example missing odds) are returned as NaN and are
-skipped when scoring; the number of scored rows is reported as coverage.
+baseline cannot score (for example a missing ``elo_diff``) are returned as NaN
+and are skipped when scoring; the number of scored rows is reported as coverage.
+
+Betting odds are deliberately neither a baseline nor a model input (user
+decision, 2026-10-20); odds columns may exist in the data but are ignored here.
 
 Register a baseline with ``@register_baseline("name")``; ``elo`` (below) is
 the reference example. Anything registered before training starts is evaluated automatically on the
@@ -16,7 +19,6 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 TARGET_COL = "target"
-ODDS_COLS = ("odds_home", "odds_draw", "odds_away")
 _LL_EPS = 1e-15
 
 BaselineFn = Callable[[pd.DataFrame, pd.DataFrame], np.ndarray]
@@ -70,59 +72,6 @@ def score_probs(y, probs):
 
 
 # ---------------------------------------------------------------------------
-# Odds -> probabilities
-# ---------------------------------------------------------------------------
-def odds_matrix(df: pd.DataFrame) -> np.ndarray:
-    """(n, 3) decimal odds; NaN where any odd is missing or not > 1."""
-    cols = [pd.to_numeric(df[c], errors="coerce").to_numpy(dtype=float) for c in ODDS_COLS]
-    odds = np.column_stack(cols)
-    bad = ~np.isfinite(odds).all(axis=1) | (odds <= 1.0).any(axis=1)
-    odds[bad] = np.nan
-    return odds
-
-
-def implied_proportional(odds: np.ndarray) -> np.ndarray:
-    """Remove the overround proportionally (normalise inverse odds)."""
-    inv = 1.0 / odds
-    return inv / inv.sum(axis=1, keepdims=True)
-
-
-def implied_shin(odds: np.ndarray, n_iter: int = 80) -> np.ndarray:
-    """Shin's method: solve for the insider-trading share z per row.
-
-    p_i(z) = (sqrt(z^2 + 4(1-z) pi_i^2 / B) - z) / (2(1-z)), with pi_i = 1/odds_i
-    and B = sum(pi); z is found by bisection so that sum(p_i) = 1. Rows with
-    no overround (B <= 1) fall back to the proportional method.
-    """
-    pi = 1.0 / odds
-    booksum = pi.sum(axis=1, keepdims=True)
-
-    def probs(z):
-        z = z[:, None]
-        return (np.sqrt(z**2 + 4.0 * (1.0 - z) * pi**2 / booksum) - z) / (2.0 * (1.0 - z))
-
-    lo = np.zeros(len(odds))
-    hi = np.full(len(odds), 1.0 - 1e-9)
-    for _ in range(n_iter):
-        mid = (lo + hi) / 2.0
-        too_big = probs(mid).sum(axis=1) > 1.0  # sum decreases in z
-        lo = np.where(too_big, mid, lo)
-        hi = np.where(too_big, hi, mid)
-    p = probs((lo + hi) / 2.0)
-    p = p / p.sum(axis=1, keepdims=True)
-    no_margin = (booksum[:, 0] <= 1.0)
-    if no_margin.any():
-        p[no_margin] = implied_proportional(odds[no_margin])
-    return p
-
-
-def _odds_available(df: pd.DataFrame) -> bool:
-    if not all(c in df.columns for c in ODDS_COLS):
-        return False
-    return bool(np.isfinite(odds_matrix(df)).all(axis=1).any())
-
-
-# ---------------------------------------------------------------------------
 # Built-in baselines
 # ---------------------------------------------------------------------------
 @register_baseline("uniform")
@@ -138,29 +87,6 @@ def class_prior(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
     counts = counts + 1.0
     prior = counts / counts.sum()
     return np.tile(prior, (len(eval_df), 1))
-
-
-def _bookmaker(eval_df: pd.DataFrame, method) -> np.ndarray:
-    out = np.full((len(eval_df), 3), np.nan)
-    if not all(c in eval_df.columns for c in ODDS_COLS):
-        return out
-    odds = odds_matrix(eval_df)
-    ok = np.isfinite(odds).all(axis=1)
-    if ok.any():
-        out[ok] = method(odds[ok])
-    return out
-
-
-@register_baseline("bookmaker", requires_columns=ODDS_COLS)
-def bookmaker(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
-    """Closing odds with proportional overround removal (NaN if odds missing)."""
-    return _bookmaker(eval_df, implied_proportional)
-
-
-@register_baseline("bookmaker_shin", requires_columns=ODDS_COLS)
-def bookmaker_shin(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
-    """Closing odds de-margined with Shin's method (NaN if odds missing)."""
-    return _bookmaker(eval_df, implied_shin)
 
 
 @register_baseline("elo", requires_columns=("elo_diff",))
@@ -193,15 +119,14 @@ def elo(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> np.ndarray:
 # Evaluation helpers
 # ---------------------------------------------------------------------------
 def available_baselines(df: pd.DataFrame):
-    """Names of registered baselines usable on ``df`` (odds baselines need odds)."""
+    """Names of registered baselines usable on ``df``.
+
+    A baseline is skipped when a required column is missing or entirely NaN.
+    """
     names = []
     for name in BASELINES:
         req = _REQUIRED_COLUMNS.get(name, ())
-        if req and not all(c in df.columns for c in req):
-            continue
-        if req and set(req) != set(ODDS_COLS) and any(df[c].isna().all() for c in req):
-            continue
-        if set(req) == set(ODDS_COLS) and not _odds_available(df):
+        if req and (not all(c in df.columns for c in req) or any(df[c].isna().all() for c in req)):
             continue
         names.append(name)
     return names

@@ -1,10 +1,13 @@
 """/track-record with a mocked settled set (no DB)."""
 import datetime as dt
+import json
 import math
+import os
 
 import numpy as np
 import pytest
 
+from src.api.track_record import backtest_block
 from tests.helpers_api import (  # noqa: F401  (fixtures)
     MODEL_VERSION,
     api_env,
@@ -24,7 +27,6 @@ def _rows():
     for i, res in enumerate(RESULTS):
         rows.append(settled_row(
             i, league="PL" if i % 3 else "PD", result=res, probs=PROBS[i % 3],
-            odds=None if i % 4 == 0 else (2.0, 3.5, 4.0),
         ))
     return rows
 
@@ -51,14 +53,7 @@ def test_metrics_from_settled_rows(client, harness):
     assert body["overall"]["accuracy"] == pytest.approx(acc, abs=1e-4)
     assert body["overall"]["brier"] == pytest.approx(brier, abs=1e-4)
 
-    # bookmaker: only rows with odds, proportional overround removal
-    with_odds = [r for r in rows if r["odds_home"]]
-    inv = 1 / np.array([2.0, 3.5, 4.0])
-    prob = inv / inv.sum()
-    exp_bm = -np.mean([math.log(prob[CODE[r["result"]]]) for r in with_odds])
-    assert body["baselines"]["bookmaker"]["n"] == len(with_odds)
-    assert body["baselines"]["bookmaker"]["log_loss"] == pytest.approx(exp_bm, abs=1e-4)
-
+    assert set(body["baselines"]) == {"class_prior", "uniform"}
     counts = np.array([450, 250, 300]) + 1.0
     prior = counts / counts.sum()
     exp_prior = -np.mean([math.log(prior[CODE[r["result"]]]) for r in rows])
@@ -87,7 +82,8 @@ def test_metrics_from_settled_rows(client, harness):
     assert bt["best_model"] == "logistic_regression"
     assert bt["holdout_window"] == ["2025-08-15", "2026-05-24"]
     assert bt["holdout_log_loss"] == 0.975 and bt["holdout_accuracy"] == 0.52
-    assert bt["baselines"]["bookmaker"] == 0.962 and bt["baselines"]["elo"] is None
+    assert set(bt["baselines"]) == {"class_prior", "uniform", "elo"}
+    assert bt["baselines"]["class_prior"] == 1.061 and bt["baselines"]["elo"] is None
 
 
 def test_recent_is_capped_at_20(client, harness):
@@ -102,18 +98,45 @@ def test_zero_settled_has_null_metrics_but_backtest(client, harness):
     body = client.get("/track-record").json()
     assert body["n_predictions"] == 7 and body["n_settled"] == 0
     assert body["overall"] == {"log_loss": None, "accuracy": None, "brier": None}
-    assert body["baselines"]["bookmaker"]["log_loss"] is None
     assert body["baselines"]["class_prior"]["log_loss"] is None
     assert body["baselines"]["uniform"]["log_loss"] is None
     assert body["by_league"] == [] and body["timeline"] == [] and body["recent"] == []
     assert body["backtest"]["holdout_log_loss"] == 0.975
 
 
-def test_no_odds_means_null_bookmaker(client, harness):
-    harness.settled = (3, [settled_row(i, odds=None) for i in range(3)])
+def _all_keys(obj):
+    """Every dict key anywhere in a JSON-like structure."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield k
+            yield from _all_keys(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _all_keys(v)
+
+
+def test_no_bookmaker_keys_anywhere(client, harness):
+    """The bookmaker comparison is retired: no key may mention it, backtest included,
+    even though the fixture registry still carries legacy bookmaker baselines."""
+    rows = _rows()
+    harness.settled = (len(rows), rows)
+    harness.class_counts = [450, 250, 300]
     body = client.get("/track-record").json()
-    assert body["baselines"]["bookmaker"] == {"log_loss": None, "n": 0}
-    assert all(x["bookmaker_log_loss"] is None for x in body["by_league"])
+    assert body["by_league"] and body["timeline"] and body["recent"] and body["backtest"]
+    keys = list(_all_keys(body))
+    assert keys and not [k for k in keys if "bookmaker" in k.lower() or "odds" in k.lower()]
+
+
+def test_committed_registry_backtest_has_no_bookmaker():
+    """The committed registry still holds legacy bookmaker baselines; they are filtered on read."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "src", "model", "artifacts", "model_registry.json")
+    with open(path, encoding="utf-8") as f:
+        registry = json.load(f)
+    bt = backtest_block(registry)
+    assert bt is not None
+    assert "elo" in bt["baselines"]
+    assert not [k for k in bt["baselines"] if "bookmaker" in k.lower()]
 
 
 def test_unknown_league_422(client):

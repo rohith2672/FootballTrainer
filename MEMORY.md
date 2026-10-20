@@ -1,8 +1,33 @@
 # FootballTrainer session handoff
 
-Last updated: 2026-10-16.
+Last updated: 2026-10-20.
 
-## Current handoff: hourly news on `codex`
+## Current handoff: bookmaker comparison removed (2026-10-20)
+
+- Branch `codex`. News work committed as `53afd06` (`feat(news): ...`); this
+  change is the follow-up commit `refactor: remove bookmaker comparison from
+  evaluation, API and UI`. Nothing pushed.
+- Verification run 2026-10-20 (no Postgres running): pytest 344 passed,
+  23 skipped (all PG tests needing `TEST_DATABASE_URL`); frontend 9 Node tests
+  passed, lint clean, build OK. Browser not re-checked after the UI change.
+- User decision: the bookmaker / market comparison is gone from evaluation, API
+  and UI. Removed the `bookmaker` and `bookmaker_shin` baselines (and Shin /
+  proportional de-margining helpers), live bookmaker log-loss and per-league /
+  per-week `bookmaker_log_loss` in `/track-record`, odds in `store.fetch_settled`,
+  and the bookmaker tile, columns, gap and chart series in the UI.
+- Retired: the "within ~0.01 log-loss of bookmaker closing odds" target, the
+  related decision gate below, and the "matched-row bookmaker comparisons"
+  follow-up. Yardsticks are now Elo (backtest), class prior and uniform, plus
+  walk-forward / holdout improvements.
+- Odds DB columns, migrations, co.uk odds parsing and `build_dataset` odds
+  columns are kept but unused. Odds must never become a model input.
+- The committed `model_registry.json` still has legacy `bookmaker*` baseline
+  keys (no retrain done); `track_record.backtest_block` filters them at read time.
+- This is the start of the plan at
+  `C:/Users/rohit/.claude/plans/go-through-the-relevant-recursive-iverson.md`:
+  team analysis + favourite teams -> UI polish -> model accuracy.
+
+## Previous handoff: hourly news on `codex` (2026-10-16)
 
 - Actual repository: `C:/Users/rohit/OneDrive/Desktop/projects/FootballTrainer`.
   The saved Codex project path without `projects/` is obsolete.

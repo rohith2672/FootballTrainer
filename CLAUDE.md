@@ -1,5 +1,18 @@
 # Football Match Outcome Predictor — Claude Code Context
 
+## Newer context: bookmaker comparison removed (2026-10-20)
+
+By user decision the bookmaker baseline and the TICKET-018..022 target
+("within ~0.01 log-loss of bookmaker closing odds") are retired. The
+`bookmaker`/`bookmaker_shin` baselines, the live bookmaker log-loss in
+`/track-record` and the bookmaker columns/series in the UI were removed.
+Yardsticks are now Elo (backtest), class prior and uniform, and progress is
+judged by walk-forward and holdout improvements against them. Odds DB columns
+and co.uk odds parsing are kept but unused; odds must never become a model
+input. The committed `model_registry.json` still carries legacy bookmaker keys;
+`/track-record` filters them when reading the backtest. The historical ticket
+text below is unchanged.
+
 ## Newer context: hourly news (2026-10-16)
 
 Work is on the user-requested `codex` branch from `dev` at `888dc66`, in

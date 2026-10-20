@@ -114,7 +114,7 @@ def fetch_settled(
     now = now or utcnow()
     cutoff = now - dt.timedelta(weeks=weeks)
     q = (
-        db.query(Prediction, Match.result, Match.odds_home, Match.odds_draw, Match.odds_away)
+        db.query(Prediction, Match.result)
         .outerjoin(
             Match,
             and_(
@@ -133,7 +133,7 @@ def fetch_settled(
     fetched = q.all()
 
     settled: List[dict] = []
-    for pred, result, o_h, o_d, o_a in fetched:
+    for pred, result in fetched:
         if result not in ("H", "D", "A") or not pred.updated_at < pred.kickoff:
             continue
         settled.append({
@@ -146,7 +146,6 @@ def fetch_settled(
             "draw": pred.draw,
             "away_win": pred.away_win,
             "result": result,
-            "odds_home": o_h, "odds_draw": o_d, "odds_away": o_a,
         })
     return len(fetched), settled
 

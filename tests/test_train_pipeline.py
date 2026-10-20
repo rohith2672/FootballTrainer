@@ -42,10 +42,10 @@ def test_end_to_end_season_mode(tmp_path, mlflow_uri):
     assert reg["data_window"]["seasons"] == [2018, 2019, 2020, 2021, 2022]
     assert reg["holdout_window"]["seasons"] == [2022]
     assert reg["n_rows"] == len(df)
-    assert set(reg["baselines"]) == {"uniform", "class_prior", "bookmaker", "bookmaker_shin", "elo"}
+    # odds are present in the data but are neither a baseline nor a feature
+    assert set(reg["baselines"]) == {"uniform", "class_prior", "elo"}
+    assert not [c for c in reg["feature_cols"] if "odds" in c]
     assert reg["baselines"]["uniform"]["holdout_log_loss"] == pytest.approx(math.log(3), abs=1e-5)
-    bm = reg["baselines"]["bookmaker"]
-    assert 0 < bm["holdout_n_scored"] < bm["holdout_n_total"]  # 1 in 5 odds missing
     assert len(reg["models"]["xgboost"]["fold_log_loss"]) == 3
 
     # selection ignores the holdout

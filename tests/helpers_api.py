@@ -68,7 +68,9 @@ def write_artifacts(directory, feature_cols=None, with_model=True):
         "holdout_accuracy": 0.52,
         "holdout_window": {"min_date": "2025-08-15 00:00:00", "max_date": "2026-05-24 00:00:00"},
         "baselines": {
+            # Legacy keys as in older registries; /track-record must filter them out.
             "bookmaker": {"holdout_log_loss": 0.962},
+            "bookmaker_shin": {"holdout_log_loss": 0.961},
             "class_prior": {"holdout_log_loss": 1.061},
             "uniform": {"holdout_log_loss": 1.0986},
             "elo": {"holdout_log_loss": None},
@@ -169,16 +171,12 @@ def client(harness, db_override):
         yield c
 
 
-def settled_row(i, league="PL", result="H", probs=(0.5, 0.3, 0.2), odds=(2.0, 3.5, 4.0),
-                kickoff=None):
+def settled_row(i, league="PL", result="H", probs=(0.5, 0.3, 0.2), kickoff=None):
     return {
         "fixture_id": 1000 + i, "league": league,
         "kickoff": kickoff or dt.datetime(2026, 10, 3, 15, 0) + dt.timedelta(days=i),
         "home_team": f"H{i}", "away_team": f"A{i}",
         "home_win": probs[0], "draw": probs[1], "away_win": probs[2], "result": result,
-        "odds_home": odds[0] if odds else None,
-        "odds_draw": odds[1] if odds else None,
-        "odds_away": odds[2] if odds else None,
     }
 
 

@@ -38,28 +38,24 @@ function segments(points) {
 
 const pathOf = (run) => run.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
-function LegendSwatch({ kind }) {
+function LegendSwatch() {
   return (
     <svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
-      <line x1="1" y1="6" x2="33" y2="6" className={`series-line ${kind}`} />
-      {kind === 'model' ? (
-        <circle cx="17" cy="6" r="4" className={`series-point ${kind}`} />
-      ) : (
-        <rect x="13" y="2" width="8" height="8" className={`series-point ${kind}`} />
-      )}
+      <line x1="1" y1="6" x2="33" y2="6" className="series-line model" />
+      <circle cx="17" cy="6" r="4" className="series-point model" />
     </svg>
   );
 }
 
 /**
- * Per-week log-loss for the model and the bookmaker. Hand-drawn SVG, no chart
- * library. Lower is better, which the axis title says explicitly.
+ * Per-week log-loss for the model. Hand-drawn SVG, no chart library. Lower is
+ * better, which the axis title says explicitly.
  */
 function LogLossChart({ timeline }) {
   const [wrapRef, width] = useElementWidth();
 
   const geometry = useMemo(() => {
-    const values = timeline.flatMap((t) => [t.logLoss, t.bookmakerLogLoss]).filter(isNum);
+    const values = timeline.map((t) => t.logLoss).filter(isNum);
     if (values.length === 0) return null;
     const axis = niceAxis(Math.min(...values), Math.max(...values));
     const innerW = width - MARGIN.left - MARGIN.right;
@@ -67,48 +63,37 @@ function LogLossChart({ timeline }) {
     const x = (i) =>
       MARGIN.left + (timeline.length === 1 ? innerW / 2 : (i / (timeline.length - 1)) * innerW);
     const y = (v) => MARGIN.top + innerH - ((v - axis.min) / (axis.max - axis.min)) * innerH;
-    const toPoints = (field) =>
-      timeline.map((t, i) => ({
-        x: x(i),
-        y: isNum(t[field]) ? y(t[field]) : null,
-        value: t[field],
-        week: t,
-      }));
+    const model = timeline.map((t, i) => ({
+      x: x(i),
+      y: isNum(t.logLoss) ? y(t.logLoss) : null,
+      value: t.logLoss,
+      week: t,
+    }));
     const maxLabels = Math.max(2, Math.floor(innerW / 70));
     const step = Math.ceil(timeline.length / maxLabels);
-    return {
-      axis,
-      y,
-      x,
-      innerH,
-      innerW,
-      model: toPoints('logLoss'),
-      book: toPoints('bookmakerLogLoss'),
-      labelStep: step,
-    };
+    return { axis, y, x, innerH, innerW, model, labelStep: step };
   }, [timeline, width]);
 
   if (!geometry) {
     return <p className="explain-note">No weekly log-loss values to chart yet.</p>;
   }
 
-  const { axis, y, x, innerH, innerW, model, book, labelStep } = geometry;
+  const { axis, y, x, innerH, innerW, model, labelStep } = geometry;
   const bottomY = MARGIN.top + innerH;
   const first = timeline[0].weekStart;
   const last = timeline[timeline.length - 1].weekStart;
   const desc =
-    `Line chart of weekly log-loss from ${fmtShortDate(first)} to ${fmtShortDate(last)}, ` +
-    'comparing the model with bookmaker odds. Lower values are better. ' +
+    `Line chart of the model’s weekly log-loss from ${fmtShortDate(first)} to ${fmtShortDate(last)}. ` +
+    'Lower values are better. ' +
     'The same figures are available in the table below the chart.';
 
-  const tip = (p, name) =>
-    `${name}, week of ${fmtShortDate(p.week.weekStart)}: log-loss ${fmtLogLoss(p.value)} (${p.week.n} matches)`;
+  const tip = (p) =>
+    `Model, week of ${fmtShortDate(p.week.weekStart)}: log-loss ${fmtLogLoss(p.value)} (${p.week.n} matches)`;
 
   return (
     <div className="chart-card">
       <ul className="chart-legend" aria-label="Legend">
-        <li><LegendSwatch kind="model" /> Model</li>
-        <li><LegendSwatch kind="book" /> Bookmaker odds</li>
+        <li><LegendSwatch /> Model</li>
       </ul>
 
       <div className="chart-wrap" ref={wrapRef}>
@@ -120,7 +105,7 @@ function LogLossChart({ timeline }) {
           aria-labelledby="chart-title chart-desc"
           className="chart-svg"
         >
-          <title id="chart-title">Weekly log-loss: model vs bookmaker</title>
+          <title id="chart-title">Weekly model log-loss</title>
           <desc id="chart-desc">{desc}</desc>
 
           {/* Gridlines and y axis */}
@@ -161,27 +146,14 @@ function LogLossChart({ timeline }) {
             Week starting
           </text>
 
-          {/* Series: bookmaker first so the model line sits on top. */}
-          {segments(book).map((run) => (
-            <path key={`b${run[0].week.weekStart}`} d={pathOf(run)} className="series-line book" />
-          ))}
+          {/* Model series */}
           {segments(model).map((run) => (
             <path key={`m${run[0].week.weekStart}`} d={pathOf(run)} className="series-line model" />
           ))}
-
-          {book.map((p) =>
-            p.y === null ? null : (
-              <g key={`bp${p.week.weekStart}`}>
-                <title>{tip(p, 'Bookmaker odds')}</title>
-                <rect x={p.x - 4} y={p.y - 4} width="8" height="8" className="series-point book" />
-                <circle cx={p.x} cy={p.y} r="12" className="chart-hit" />
-              </g>
-            ),
-          )}
           {model.map((p) =>
             p.y === null ? null : (
               <g key={`mp${p.week.weekStart}`}>
-                <title>{tip(p, 'Model')}</title>
+                <title>{tip(p)}</title>
                 <circle cx={p.x} cy={p.y} r="4.5" className="series-point model" />
                 <circle cx={p.x} cy={p.y} r="12" className="chart-hit" />
               </g>
@@ -194,13 +166,12 @@ function LogLossChart({ timeline }) {
         <summary>Show chart data as a table</summary>
         <div className="table-scroll">
           <table className="data-table">
-            <caption className="sr-only">Weekly log-loss, model vs bookmaker</caption>
+            <caption className="sr-only">Weekly model log-loss</caption>
             <thead>
               <tr>
                 <th scope="col">Week starting</th>
                 <th scope="col" className="num">Matches</th>
                 <th scope="col" className="num">Model log-loss</th>
-                <th scope="col" className="num">Bookmaker log-loss</th>
               </tr>
             </thead>
             <tbody>
@@ -209,7 +180,6 @@ function LogLossChart({ timeline }) {
                   <th scope="row">{fmtShortDate(t.weekStart)}</th>
                   <td className="num">{t.n}</td>
                   <td className="num">{fmtLogLoss(t.logLoss)}</td>
-                  <td className="num">{fmtLogLoss(t.bookmakerLogLoss)}</td>
                 </tr>
               ))}
             </tbody>

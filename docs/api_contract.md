@@ -95,15 +95,14 @@ Query params: `league` (optional), `weeks` (default 26).
   "n_settled": 380,
   "overall": {"log_loss": 0.982, "accuracy": 0.51, "brier": 0.58},
   "baselines": {
-    "bookmaker": {"log_loss": 0.968, "n": 371},
     "class_prior": {"log_loss": 1.064, "n": 380},
     "uniform": {"log_loss": 1.0986, "n": 380}
   },
   "by_league": [
-    {"league": "PL", "n": 80, "log_loss": 0.97, "accuracy": 0.53, "bookmaker_log_loss": 0.95}
+    {"league": "PL", "n": 80, "log_loss": 0.97, "accuracy": 0.53}
   ],
   "timeline": [
-    {"week_start": "2026-10-12", "n": 38, "log_loss": 1.01, "accuracy": 0.47, "bookmaker_log_loss": 0.99}
+    {"week_start": "2026-10-12", "n": 38, "log_loss": 1.01, "accuracy": 0.47}
   ],
   "recent": [
     {"fixture_id": 537001, "league": "PL", "date": "2026-10-11", "home_team": "...", "away_team": "...",
@@ -114,10 +113,15 @@ Query params: `league` (optional), `weeks` (default 26).
     "best_model": "logistic_regression",
     "holdout_window": ["2025-08-15", "2026-05-24"],
     "holdout_log_loss": 0.975, "holdout_accuracy": 0.52,
-    "baselines": {"bookmaker": 0.962, "class_prior": 1.061, "uniform": 1.0986, "elo": 0.99}
+    "baselines": {"class_prior": 1.061, "uniform": 1.0986, "elo": 0.99}
   }
 }
 ```
+
+- Yardsticks are class prior and uniform (live) plus Elo (backtest). Betting
+  odds are not a model input and there is no market comparison (user decision,
+  2026-10-20); legacy registry baselines of that kind are dropped when the
+  backtest block is read.
 
 - Live metrics come only from predictions stored *before* kickoff and settled
   after the result is known. When there are none yet, `n_settled` is 0, metric

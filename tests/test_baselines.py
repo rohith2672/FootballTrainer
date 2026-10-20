@@ -40,54 +40,15 @@ def test_class_prior_missing_class_is_finite():
     assert math.isfinite(scores["log_loss"])
 
 
-def test_proportional_overround_removal():
-    odds = np.array([[2.0, 3.5, 4.0]])
-    p = B.implied_proportional(odds)
-    np.testing.assert_allclose(p.sum(), 1.0)
-    inv = 1 / odds
-    np.testing.assert_allclose(p, inv / inv.sum())
-
-
-def test_shin_sums_to_one_and_differs_from_proportional():
-    odds = np.array([[1.5, 4.0, 7.0], [2.0, 3.5, 4.0], [3.1, 3.2, 2.4]])
-    p = B.implied_shin(odds)
-    np.testing.assert_allclose(p.sum(axis=1), 1.0, atol=1e-9)
-    assert (p > 0).all()
-    prop = B.implied_proportional(odds)
-    assert not np.allclose(p, prop)
-    # Shin shifts mass away from longshots relative to proportional
-    assert p[0, 2] < prop[0, 2]
-
-
-def test_shin_no_overround_falls_back_to_proportional():
-    odds = np.array([[2.0, 4.0, 4.0]])  # book sum exactly 1
-    np.testing.assert_allclose(B.implied_shin(odds), B.implied_proportional(odds))
-
-
-def test_bookmaker_skips_missing_odds_and_reports_coverage():
-    df = _df(10)
-    df.loc[[0, 3], "odds_draw"] = np.nan
-    df.loc[5, "odds_home"] = 0.5  # invalid decimal odds
-    scores, mask = B.evaluate_baseline("bookmaker", df, df)
-    assert scores["n_total"] == 10
-    assert scores["n_scored"] == 7
-    assert mask.sum() == 7
-    assert math.isfinite(scores["log_loss"])
-    scores_shin, _ = B.evaluate_baseline("bookmaker_shin", df, df)
-    assert scores_shin["n_scored"] == 7
-
-
-def test_available_baselines_depends_on_odds_columns():
+def test_available_baselines_ignore_odds_columns():
     no_odds = make_matches(seasons=(2020,), per_season=30)
     # make_matches carries every FEATURE_COLS column, so the elo baseline (needs elo_diff) is available
     assert B.available_baselines(no_odds) == ["uniform", "class_prior", "elo"]
     assert B.available_baselines(no_odds.drop(columns=["elo_diff"])) == ["uniform", "class_prior"]
+    # odds columns in the data never create an odds-based baseline
     with_odds = make_matches(seasons=(2020,), per_season=30, with_odds=True)
-    names = B.available_baselines(with_odds)
-    assert "bookmaker" in names and "bookmaker_shin" in names
-    all_null = with_odds.copy()
-    all_null[["odds_home", "odds_draw", "odds_away"]] = np.nan
-    assert "bookmaker" not in B.available_baselines(all_null)
+    assert B.available_baselines(with_odds) == ["uniform", "class_prior", "elo"]
+    assert set(B.BASELINES) == {"uniform", "class_prior", "elo"}
 
 
 def test_register_baseline_hook():

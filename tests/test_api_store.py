@@ -57,9 +57,9 @@ def test_fetch_settled_requires_result_and_pre_kickoff_write():
         )
 
     rows = [
-        (pred(ko - dt.timedelta(hours=3)), "H", 2.0, 3.0, 4.0),     # settled
-        (pred(ko - dt.timedelta(hours=3)), None, None, None, None),   # no result yet
-        (pred(ko + dt.timedelta(minutes=1)), "D", None, None, None),  # written after kickoff
+        (pred(ko - dt.timedelta(hours=3)), "H"),     # settled
+        (pred(ko - dt.timedelta(hours=3)), None),    # no result yet
+        (pred(ko + dt.timedelta(minutes=1)), "D"),   # written after kickoff
     ]
     q = MagicMock()
     q.outerjoin.return_value = q
@@ -69,7 +69,8 @@ def test_fetch_settled_requires_result_and_pre_kickoff_write():
     db.query.return_value = q
     n, settled = store.fetch_settled(db, league="PL", weeks=26, model_version="v1", now=NOW)
     assert n == 3 and len(settled) == 1
-    assert settled[0]["result"] == "H" and settled[0]["odds_home"] == 2.0
+    assert settled[0]["result"] == "H"
+    assert not any(k.startswith("odds") for k in settled[0])  # odds are not used for scoring
 
 
 def test_ping_db_unconfigured(monkeypatch):

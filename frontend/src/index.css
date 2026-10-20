@@ -30,9 +30,8 @@
   --away-glow: rgba(251, 146, 60, 0.16);
   --danger: #f87171;
 
-  /* Chart series: blue solid + amber dashed, also distinguished by marker shape. */
+  /* Chart series: the model line (solid blue, circular markers). */
   --series-model: #60a5fa;
-  --series-book: #fbbf24;
   --positive-bar: #38bdf8;
   --negative-bar: #fbbf24;
   --focus-ring: #93c5fd;
@@ -1352,10 +1351,8 @@ body::after {
 }
 
 .series-line.model { stroke: var(--series-model); }
-.series-line.book { stroke: var(--series-book); stroke-dasharray: 7 5; }
 
 .series-point.model { fill: var(--series-model); stroke: var(--bg-base); stroke-width: 1.5; }
-.series-point.book { fill: var(--series-book); stroke: var(--bg-base); stroke-width: 1.5; }
 
 .chart-hit {
   fill: transparent;

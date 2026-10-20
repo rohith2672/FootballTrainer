@@ -13,7 +13,7 @@ const VIEWS = {
   trackRecord: {
     badge: 'Track record',
     title: 'Track record',
-    blurb: 'How the model’s saved pre-match predictions have scored against results and bookmaker odds',
+    blurb: 'How the model’s saved pre-match predictions have scored against results and simple baselines',
   },
   news: {
     badge: 'Football news',

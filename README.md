@@ -308,7 +308,7 @@ FootballTrainer/
 
 - **Data coverage**: Only Premier League (PL) seasons 2021–2023. Adding more leagues (La Liga, Bundesliga) and more seasons would improve model robustness.
 - **No Elo ratings**: Team strength is captured only via recent form. Adding Elo or FIFA ratings as features could significantly improve accuracy.
-- **No betting odds feature**: Market odds encode crowd wisdom and injury news. Integrating them as a feature is a known performance booster.
+- **Betting odds are deliberately unused**: historical odds columns are still ingested and stored, but by user decision (2026-10-20) they are neither a model input nor an evaluation baseline. Yardsticks are Elo, class prior and uniform.
 - **No injury / lineup data**: Squad availability is a strong predictor but is not currently modelled.
 - **Static model**: The model is trained once offline. A scheduled retraining pipeline (e.g., weekly) would keep predictions fresh as the season progresses.
 - **Single-label target**: The model predicts match outcome only. Extending to scoreline or goal totals would require additional modelling work.

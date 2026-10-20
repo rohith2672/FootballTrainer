@@ -14,16 +14,6 @@ export const fmtLogLoss = (v) => (isNum(v) ? v.toFixed(3) : DASH);
 export const fmtPercent = (v) => (isNum(v) ? `${(v * 100).toFixed(1)}%` : DASH);
 export const fmtPct0 = (v) => (isNum(v) ? `${Math.round(v * 100)}%` : DASH);
 
-/** Signed difference with a real minus sign, e.g. "+0.012", "−0.020". */
-export function fmtGap(v) {
-  if (!isNum(v)) return DASH;
-  const text = Math.abs(v).toFixed(3);
-  if (Number(text) === 0) return '0.000';
-  return `${v > 0 ? '+' : '−'}${text}`;
-}
-
-export const gapOf = (model, book) => (isNum(model) && isNum(book) ? model - book : null);
-
 /** "12 Oct" from a YYYY-MM-DD string. */
 export function fmtShortDate(value) {
   const d = parseLocalDate(value);
@@ -46,7 +36,6 @@ export function normalizeTrackRecord(raw) {
   const overall = obj(raw.overall);
   const baselines = obj(raw.baselines);
   const backtest = raw.backtest && typeof raw.backtest === 'object' ? obj(raw.backtest) : null;
-  const bookmaker = obj(baselines.bookmaker);
   const prior = obj(baselines.class_prior);
   const uniform = obj(baselines.uniform);
 
@@ -60,7 +49,6 @@ export function normalizeTrackRecord(raw) {
       brier: numOrNull(overall.brier),
     },
     baselines: {
-      bookmaker: { logLoss: numOrNull(bookmaker.log_loss), n: numOrNull(bookmaker.n) },
       classPrior: { logLoss: numOrNull(prior.log_loss), n: numOrNull(prior.n) },
       uniform: { logLoss: numOrNull(uniform.log_loss), n: numOrNull(uniform.n) },
     },
@@ -71,7 +59,6 @@ export function normalizeTrackRecord(raw) {
         n: numOrNull(r.n) ?? 0,
         logLoss: numOrNull(r.log_loss),
         accuracy: numOrNull(r.accuracy),
-        bookmakerLogLoss: numOrNull(r.bookmaker_log_loss),
       })),
     timeline: arr(raw.timeline)
       .filter((r) => r && typeof r === 'object' && r.week_start)
@@ -80,7 +67,6 @@ export function normalizeTrackRecord(raw) {
         n: numOrNull(r.n) ?? 0,
         logLoss: numOrNull(r.log_loss),
         accuracy: numOrNull(r.accuracy),
-        bookmakerLogLoss: numOrNull(r.bookmaker_log_loss),
       }))
       .sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
     recent: arr(raw.recent).filter((r) => r && typeof r === 'object'),
@@ -100,7 +86,6 @@ export function normalizeTrackRecord(raw) {
 }
 
 export const BASELINE_LABELS = {
-  bookmaker: 'Bookmaker odds',
   class_prior: 'Class prior (always predict base rates)',
   uniform: 'Uniform (1/3 each)',
   elo: 'Elo rating',
