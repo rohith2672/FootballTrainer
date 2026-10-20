@@ -98,6 +98,7 @@ export const BASELINE_LABELS = {
   class_prior: 'Class prior (always predict base rates)',
   uniform: 'Uniform (1/3 each)',
   elo: 'Elo rating',
+  poisson: 'Poisson goals model',
 };
 
 export function baselineLabel(key) {

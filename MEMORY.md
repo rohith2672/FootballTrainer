@@ -59,6 +59,7 @@ Preserve the untracked `TEST_REPORT_2026-10-15.md`.
   data (before the model merge).
 - Frontend: 109 Node tests, lint and build clean.
 - Serving smoke with the new model: Arsenal v Chelsea 0.618/0.241/0.140.
+- 2026-10-20 post-merge (9a7a400): PG 18 suite 460 passed/0 skipped; real API+UI on model v2 at 375/1100 light/dark OK (poisson baseline label fixed afterwards).
 
 ### Not verified
 
