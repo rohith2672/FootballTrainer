@@ -1,13 +1,29 @@
-"""Single source of truth for the model feature order.
+"""Single source of truth for the feature columns and the model feature order.
 
 Dependency-free on purpose (no pandas / SQLAlchemy) so training, evaluation and
-the API can import it cheaply. ``src.features.engine.compute_features`` returns
-its columns in exactly this order and ``src.model.train`` re-exports it.
+the API can import it cheaply.
+
+* ``ENGINE_COLS``: every column ``src.features.engine.compute_features`` can
+  produce (pass ``columns=`` to get any of them).
+* ``FEATURE_COLS``: the model's inputs, in order. ``compute_features`` returns
+  exactly these by default and ``src.model.train`` re-exports it. The trained
+  model's registry stores this list; the API refuses a model whose list differs.
 """
 
 LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL"]
 
 ELO_COLS = ["home_elo", "away_elo", "elo_diff", "elo_expected_home"]
+
+# Online Poisson / Dixon-Coles goals model (src/features/engine.py).
+POISSON_COLS = [
+    "pois_lambda_home",
+    "pois_lambda_away",
+    "pois_p_home",
+    "pois_p_draw",
+    "pois_p_away",
+    "pois_logit_home",   # log(p_home / p_draw)
+    "pois_logit_away",   # log(p_away / p_draw)
+]
 
 FORM_COLS = [
     "home_form_pts_pg",
@@ -46,21 +62,49 @@ REST_COLS = ["home_days_since_last", "away_days_since_last"]
 
 CONTEXT_COLS = [f"league_{lg}" for lg in LEAGUES] + ["season_progress"]
 
-FEATURE_COLS = (
-    ELO_COLS + FORM_COLS + SHOTS_COLS + H2H_COLS + SEASON_VENUE_COLS + REST_COLS + CONTEXT_COLS
+ENGINE_COLS = (
+    ELO_COLS + POISSON_COLS + FORM_COLS + SHOTS_COLS + H2H_COLS + SEASON_VENUE_COLS
+    + REST_COLS + CONTEXT_COLS
 )
 
+# Model inputs (selected on walk-forward log-loss, docs/model_experiments_2026-10-20.md).
+# The columns the API reads for match details / availability checks
+# (src/api/serving.py) are all included.
+FEATURE_COLS = ELO_COLS + POISSON_COLS + [
+    "home_form_pts_pg",
+    "away_form_pts_pg",
+    "home_form_goals_scored_avg",
+    "home_form_goals_conceded_avg",
+    "away_form_goals_scored_avg",
+    "away_form_goals_conceded_avg",
+    "home_shots_for_avg",
+    "away_shots_for_avg",
+    "home_days_since_last",
+    "away_days_since_last",
+    "home_form_n",
+    "away_form_n",
+    "h2h_n",
+    "h2h_home_pts_rate",
+]
+
+assert len(set(ENGINE_COLS)) == len(ENGINE_COLS), "duplicate engine column"
 assert len(set(FEATURE_COLS)) == len(FEATURE_COLS), "duplicate feature column"
+assert set(FEATURE_COLS) <= set(ENGINE_COLS), "feature column the engine does not compute"
 
 
-# Human-readable labels used by the API's "top factors" explanation. The test
-# suite checks this covers exactly FEATURE_COLS (no import-time assert on
-# purpose: this module is imported by training).
-FEATURE_LABELS = {
+# Human-readable labels for every engine column.
+ENGINE_LABELS = {
     "home_elo": "Home team Elo rating",
     "away_elo": "Away team Elo rating",
     "elo_diff": "Elo rating gap (incl. home advantage)",
     "elo_expected_home": "Elo-expected home score",
+    "pois_lambda_home": "Expected home goals (goals model)",
+    "pois_lambda_away": "Expected away goals (goals model)",
+    "pois_p_home": "Goals-model home win probability",
+    "pois_p_draw": "Goals-model draw probability",
+    "pois_p_away": "Goals-model away win probability",
+    "pois_logit_home": "Goals-model home win vs draw odds",
+    "pois_logit_away": "Goals-model away win vs draw odds",
     "home_form_pts_pg": "Home team recent form (points per game)",
     "home_form_goals_scored_avg": "Home team goals scored (last 5)",
     "home_form_goals_conceded_avg": "Home team goals conceded (last 5)",
@@ -95,3 +139,8 @@ FEATURE_LABELS = {
     "league_CL": "Champions League context",
     "season_progress": "Point in the season",
 }
+
+# Labels used by the API's "top factors" explanation: exactly FEATURE_COLS (the
+# test suite checks the coverage; no import-time assert on purpose: this module
+# is imported by training).
+FEATURE_LABELS = {name: ENGINE_LABELS[name] for name in FEATURE_COLS if name in ENGINE_LABELS}

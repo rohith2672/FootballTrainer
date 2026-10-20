@@ -50,10 +50,18 @@ def make_history(seasons=(2023, 2024, 2025), seed=0) -> pd.DataFrame:
 
 def write_artifacts(directory, feature_cols=None, with_model=True):
     """Pickle a tiny imputer+LogisticRegression on synthetic data and write a registry."""
+    from sklearn.preprocessing import StandardScaler
+
+    from src.features.engine import compute_features
+
     rng = np.random.default_rng(1)
-    X = rng.random((300, len(FEATURE_COLS)))
-    y = rng.integers(0, 3, 300)
-    model = Pipeline([("imp", SimpleImputer()), ("lr", LogisticRegression(max_iter=500))]).fit(X, y)
+    # Fit on engine-shaped features (realistic scales) so occlusion factors are non-degenerate.
+    X = compute_features(make_history(seasons=(2020, 2021, 2022, 2023, 2024, 2025), seed=7)).to_numpy(dtype=float)
+    y = rng.integers(0, 3, len(X))
+    model = Pipeline([
+        ("imp", SimpleImputer(keep_empty_features=True)), ("sc", StandardScaler()),
+        ("lr", LogisticRegression(max_iter=500)),
+    ]).fit(X, y)
     model_path = directory / "best_model.pkl"
     registry_path = directory / "model_registry.json"
     if with_model:

@@ -19,6 +19,7 @@ Evaluation design (no data leakage, nothing random):
 import argparse
 import copy
 import datetime
+import itertools
 import json
 import math
 import os
@@ -41,6 +42,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.features.columns import FEATURE_COLS  # noqa: F401  (single source of truth; the API imports it from here)
 from src.model import baselines as baselines_mod
+from src.model import scoring
 from src.model.baselines import accuracy_3, log_loss_3, score_probs
 # Re-exported for backward compatibility (pickles now live in wrappers.py).
 from src.model.wrappers import (  # noqa: F401
@@ -67,7 +69,10 @@ BEST_MODEL_PATH = os.path.join(ARTIFACTS_DIR, "best_model.pkl")
 REGISTRY_PATH  = os.path.join(ARTIFACTS_DIR, "model_registry.json")
 EXPERIMENT_NAME = "football-predictor"
 N_TRIALS = 50
-DECAY_LAMBDA = 0.001
+DECAY_LAMBDA = 0.001        # default recency decay (per day); tuned per model kind when tuning runs
+DECAY_PARAM = "decay_lambda"
+DECAY_RANGE = (1e-4, 3e-3)  # Optuna search range (log-uniform) for tree models
+LOGREG_GRID = {"C": (0.05, 0.3, 1.0), DECAY_PARAM: (0.0, 0.0005, 0.001, 0.002)}
 SEED = 42
 N_FOLDS = 4                 # date-block folds when season folds are not possible
 HOLDOUT_FRACTION = 0.2      # holdout share of distinct dates when < 3 seasons
@@ -164,11 +169,30 @@ def save_model(model, path: str = None):
         pickle.dump(model, f)
 
 
-def compute_sample_weights(train_df: pd.DataFrame) -> np.ndarray:
-    """Exponential recency weights (mean 1), relative to the newest training row."""
-    age_days = (train_df["date"].max() - train_df["date"]).dt.days.values.astype(float)
-    weights = np.exp(-DECAY_LAMBDA * age_days)
+def compute_sample_weights(train_df: pd.DataFrame, decay_lambda: Optional[float] = None) -> np.ndarray:
+    """Exponential recency weights (mean 1), relative to the newest training row.
+
+    ``decay_lambda`` (per day) defaults to the module constant ``DECAY_LAMBDA``.
+    """
+    return _recency_weights(_age_days(train_df), decay_lambda)
+
+
+def _age_days(train_df: pd.DataFrame) -> np.ndarray:
+    return (train_df["date"].max() - train_df["date"]).dt.days.values.astype(float)
+
+
+def _recency_weights(age_days: np.ndarray, decay_lambda: Optional[float] = None) -> np.ndarray:
+    lam = DECAY_LAMBDA if decay_lambda is None else float(decay_lambda)
+    weights = np.exp(-lam * age_days)
     return weights / weights.mean()
+
+
+def split_params(params: Optional[dict]):
+    """(estimator params, decay_lambda or None): ``decay_lambda`` is a training
+    (sample-weight) parameter stored alongside the estimator parameters."""
+    params = dict(params or {})
+    decay = params.pop(DECAY_PARAM, None)
+    return params, decay
 
 
 def _X(df: pd.DataFrame) -> np.ndarray:
@@ -304,19 +328,19 @@ def chronological_slices(df: pd.DataFrame, fractions=CAL_SLICES):
 # ---------------------------------------------------------------------------
 # Model factories
 # ---------------------------------------------------------------------------
-def make_logreg() -> Pipeline:
+def make_logreg(C: float = 1.0) -> Pipeline:
     """Impute -> scale -> multinomial logistic regression (NaN-tolerant)."""
     return Pipeline([
         ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
         ("scaler", StandardScaler()),
-        ("logreg", LogisticRegression(max_iter=1000, solver="lbfgs")),
+        ("logreg", LogisticRegression(max_iter=1000, solver="lbfgs", C=C)),
     ])
 
 
 def make_model(kind: str, params: Optional[dict] = None):
-    params = dict(params or {})
+    params, _ = split_params(params)
     if kind == "logistic_regression":
-        return make_logreg()
+        return make_logreg(**params)
     if kind == "xgboost":
         return xgb.XGBClassifier(**{**XGB_FIXED, **params})
     if kind == "lgbm":
@@ -336,15 +360,16 @@ def fit_estimator(model, X, y, sample_weight=None):
 
 def fit_plain(kind: str, params: dict, train_df: pd.DataFrame, sample_weight=None):
     _require_all_classes(train_df, f"{kind} training slice")
+    kind_params = params.get(kind) if kind in params else None
     if sample_weight is None:
-        sample_weight = compute_sample_weights(train_df)
-    model = make_model(kind, params.get(kind) if kind in params else None)
+        sample_weight = compute_sample_weights(train_df, split_params(kind_params)[1])
+    model = make_model(kind, kind_params)
     return fit_estimator(model, _X(train_df), _y(train_df), sample_weight)
 
 
-def _suggest(kind: str, trial) -> dict:
+def _suggest(kind: str, trial, tune_decay: bool = True) -> dict:
     if kind == "xgboost":
-        return {
+        params = {
             "max_depth": trial.suggest_int("max_depth", 2, 8),
             "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
             "n_estimators": trial.suggest_int("n_estimators", 100, 500),
@@ -352,8 +377,8 @@ def _suggest(kind: str, trial) -> dict:
             "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 50.0, log=True),
             "reg_lambda": trial.suggest_float("reg_lambda", 1e-2, 50.0, log=True),
         }
-    if kind == "lgbm":
-        return {
+    elif kind == "lgbm":
+        params = {
             "num_leaves": trial.suggest_int("num_leaves", 4, 64),
             "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
             "n_estimators": trial.suggest_int("n_estimators", 100, 500),
@@ -362,7 +387,11 @@ def _suggest(kind: str, trial) -> dict:
             "min_child_samples": trial.suggest_int("min_child_samples", 10, 100),
             "reg_lambda": trial.suggest_float("reg_lambda", 1e-2, 50.0, log=True),
         }
-    raise ValueError(kind)
+    else:
+        raise ValueError(kind)
+    if tune_decay:
+        params[DECAY_PARAM] = trial.suggest_float(DECAY_PARAM, *DECAY_RANGE, log=True)
+    return params
 
 
 def _usable_folds(df: pd.DataFrame, folds):
@@ -374,28 +403,61 @@ def _usable_folds(df: pd.DataFrame, folds):
     return ok
 
 
-def tune_model(kind: str, df: pd.DataFrame, folds, n_trials: int = N_TRIALS, seed: int = SEED) -> dict:
-    """Optuna (seeded TPE) minimising mean walk-forward log-loss."""
+def _prepare_folds(df: pd.DataFrame, folds):
     folds = _usable_folds(df, folds)
     if not folds:
         raise ValueError("no usable walk-forward folds for tuning")
     prepared = []
     for tr, va in folds:
         tr_df, va_df = df.iloc[tr], df.iloc[va]
-        prepared.append((_X(tr_df), _y(tr_df), compute_sample_weights(tr_df), _X(va_df), _y(va_df)))
+        prepared.append((_X(tr_df), _y(tr_df), _age_days(tr_df), _X(va_df), _y(va_df)))
+    return prepared
+
+
+def _wf_loss(kind: str, params: dict, prepared) -> float:
+    _, decay = split_params(params)
+    losses = []
+    for X_tr, y_tr, age_tr, X_va, y_va in prepared:
+        model = make_model(kind, params)
+        fit_estimator(model, X_tr, y_tr, _recency_weights(age_tr, decay))
+        losses.append(log_loss_3(y_va, base_predict_proba(model, X_va)))
+    return float(np.mean(losses))
+
+
+def tune_model(
+    kind: str, df: pd.DataFrame, folds, n_trials: int = N_TRIALS, seed: int = SEED,
+    tune_decay: bool = True,
+) -> dict:
+    """Optuna (seeded TPE) minimising mean walk-forward log-loss.
+
+    With ``tune_decay`` the recency decay of the sample weights is searched
+    together with the estimator parameters (returned as ``decay_lambda``).
+    """
+    prepared = _prepare_folds(df, folds)
 
     def objective(trial):
-        params = _suggest(kind, trial)
-        losses = []
-        for X_tr, y_tr, w_tr, X_va, y_va in prepared:
-            model = make_model(kind, params)
-            fit_estimator(model, X_tr, y_tr, w_tr)
-            losses.append(log_loss_3(y_va, base_predict_proba(model, X_va)))
-        return float(np.mean(losses))
+        return _wf_loss(kind, _suggest(kind, trial, tune_decay), prepared)
 
     study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=seed))
     study.optimize(objective, n_trials=n_trials)
     return dict(study.best_params)
+
+
+def tune_logreg(df: pd.DataFrame, folds, grid: Optional[dict] = None) -> dict:
+    """Small grid (C x recency decay) for the logistic regression on walk-forward log-loss.
+
+    Ties keep the first grid point, so the result is deterministic.
+    """
+    grid = LOGREG_GRID if grid is None else grid
+    prepared = _prepare_folds(df, folds)
+    best, best_loss = None, float("inf")
+    keys = list(grid)
+    for values in itertools.product(*(grid[k] for k in keys)):
+        params = dict(zip(keys, values))
+        loss = _wf_loss("logistic_regression", params, prepared)
+        if loss < best_loss - 1e-12:
+            best, best_loss = params, loss
+    return best
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +526,7 @@ def walk_forward_evaluate(plan: SplitPlan, params: dict, method: str = CALIBRATI
     models = {n: {"log_loss": [], "accuracy": []} for n in CANDIDATES}
     base_res = {n: {"log_loss": [], "accuracy": [], "n_scored": [], "n_total": []} for n in names}
     labels, sizes = [], []
+    oof = {n: [] for n in CANDIDATES}      # pooled out-of-fold (val rows, probs) for summary metrics
 
     for (tr, va), label in zip(plan.folds, plan.fold_labels):
         train_df, val_df = df.iloc[tr], df.iloc[va]
@@ -476,6 +539,7 @@ def walk_forward_evaluate(plan: SplitPlan, params: dict, method: str = CALIBRATI
         for name, proba in preds.items():
             models[name]["log_loss"].append(log_loss_3(y_val, proba))
             models[name]["accuracy"].append(accuracy_3(y_val, proba))
+            oof[name].append((va, proba))
         for bname in names:
             scores, _ = baselines_mod.evaluate_baseline(bname, train_df, val_df)
             base_res[bname]["log_loss"].append(scores["log_loss"])
@@ -487,6 +551,12 @@ def walk_forward_evaluate(plan: SplitPlan, params: dict, method: str = CALIBRATI
 
     if not labels:
         raise ValueError("No walk-forward fold could be evaluated")
+    for name, parts in oof.items():
+        rows = np.concatenate([p[0] for p in parts])
+        proba = np.vstack([p[1] for p in parts])
+        val = df.iloc[rows]
+        models[name]["pooled"] = scoring.score_all(_y(val), proba)
+        models[name]["per_league"] = scoring.per_league_scores(val, proba)
     return {"fold_labels": labels, "fold_sizes": sizes, "models": models, "baselines": base_res}
 
 
@@ -514,7 +584,7 @@ def _train_tree(kind, train, test, sample_weight, n_trials, n_folds, seed):
     fixed = XGB_FIXED if kind == "xgboost" else LGBM_FIXED
     best_params = {**best, **fixed}
     if sample_weight is None:
-        sample_weight = compute_sample_weights(train)
+        sample_weight = compute_sample_weights(train, split_params(best_params)[1])
     model = make_model(kind, best_params)
     fit_estimator(model, _X(train), _y(train), sample_weight)
     y_test = _y(test)
@@ -687,8 +757,9 @@ def main(
         f"CV mode: {plan.mode}  folds: {len(plan.folds)}"
     )
 
-    # 1. Tune tree models on walk-forward folds (holdout untouched).
-    params = {"logistic_regression": {}}
+    # 1. Tune every base model on walk-forward folds (holdout untouched).
+    print("Tuning logistic regression (C x recency decay grid) ...")
+    params = {"logistic_regression": tune_logreg(plan.df, plan.folds)}
     for kind in ("xgboost", "lgbm"):
         print(f"Running {kind} Optuna search ({n_trials} trials, seed={seed}) ...")
         params[kind] = tune_model(kind, plan.df, plan.folds, n_trials=n_trials, seed=seed)
@@ -716,8 +787,15 @@ def main(
             "walk_forward_accuracy": _mean(wf["models"][name]["accuracy"]),
             "fold_log_loss": wf["models"][name]["log_loss"],
             "fold_accuracy": wf["models"][name]["accuracy"],
+            "walk_forward_brier": wf["models"][name]["pooled"]["brier"],
+            "walk_forward_draw_pred_rate": wf["models"][name]["pooled"]["draw_pred_rate"],
+            "walk_forward_per_league": wf["models"][name]["per_league"],
             "holdout_log_loss": log_loss_3(y_hold, hold_proba[name]),
             "holdout_accuracy": accuracy_3(y_hold, hold_proba[name]),
+            "holdout_brier": scoring.brier_3(y_hold, hold_proba[name]),
+            "holdout_draw_pred_rate": scoring.draw_prediction_rate(hold_proba[name]),
+            "holdout_confusion_matrix": scoring.confusion_3(y_hold, hold_proba[name]),
+            "holdout_per_league": scoring.per_league_scores(holdout, hold_proba[name]),
         }
 
     baselines_reg = {}

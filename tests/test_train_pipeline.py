@@ -43,7 +43,7 @@ def test_end_to_end_season_mode(tmp_path, mlflow_uri):
     assert reg["holdout_window"]["seasons"] == [2022]
     assert reg["n_rows"] == len(df)
     # odds are present in the data but are neither a baseline nor a feature
-    assert set(reg["baselines"]) == {"uniform", "class_prior", "elo"}
+    assert set(reg["baselines"]) == {"uniform", "class_prior", "elo", "poisson"}
     assert not [c for c in reg["feature_cols"] if "odds" in c]
     assert reg["baselines"]["uniform"]["holdout_log_loss"] == pytest.approx(math.log(3), abs=1e-5)
     assert len(reg["models"]["xgboost"]["fold_log_loss"]) == 3
@@ -74,7 +74,7 @@ def test_end_to_end_no_season_no_league_no_odds(tmp_path, mlflow_uri):
     assert reg["selection"]["mode"] == "date"
     assert reg["leagues"] is None
     assert reg["data_window"]["seasons"] is None
-    assert set(reg["baselines"]) == {"uniform", "class_prior", "elo"}
+    assert set(reg["baselines"]) == {"uniform", "class_prior", "elo", "poisson"}
     assert math.isfinite(reg["holdout_log_loss"])
 
 
@@ -188,3 +188,43 @@ def test_pickles_from_cli_load_in_a_fresh_process(tmp_path, mlflow_uri):
     with open(art / "ensemble.pkl", "rb") as f:
         raw = f.read()
     assert b"__main__" not in raw
+
+
+def test_registry_reports_per_league_brier_draw_rate_and_tuned_decay(tmp_path, mlflow_uri):
+    df = make_matches(seasons=(2018, 2019, 2020, 2021, 2022), per_season=120, leagues=["PL", "PD"])
+    reg, _ = _run(df, tmp_path, mlflow_uri)
+    for name in T.CANDIDATES:
+        m = reg["models"][name]
+        assert set(m["holdout_per_league"]) == {"PD", "PL"}
+        assert set(m["walk_forward_per_league"]) == {"PD", "PL"}
+        assert 0.0 <= m["holdout_brier"] <= 2.0 and 0.0 <= m["walk_forward_brier"] <= 2.0
+        assert 0.0 <= m["holdout_draw_pred_rate"] <= 1.0
+        cm = np.array(m["holdout_confusion_matrix"])
+        assert cm.shape == (3, 3) and cm.sum() == reg["n_holdout_rows"]
+    # recency decay tuned with the estimator parameters (trees) and on a grid (logistic regression)
+    lo, hi = T.DECAY_RANGE
+    for kind in ("xgboost", "lgbm"):
+        assert lo <= reg["best_params"][kind][T.DECAY_PARAM] <= hi
+    lr = reg["best_params"]["logistic_regression"]
+    assert lr["C"] in T.LOGREG_GRID["C"] and lr[T.DECAY_PARAM] in T.LOGREG_GRID[T.DECAY_PARAM]
+
+
+def test_decay_parameter_changes_weights_and_is_not_passed_to_estimators():
+    df = make_matches(seasons=(2020, 2021), per_season=60)
+    w_default = T.compute_sample_weights(df)
+    w_none = T.compute_sample_weights(df, 0.0)
+    assert np.allclose(w_none, 1.0) and not np.allclose(w_default, 1.0)
+    params, decay = T.split_params({"max_depth": 3, T.DECAY_PARAM: 0.002})
+    assert params == {"max_depth": 3} and decay == 0.002
+    T.make_model("xgboost", {"max_depth": 3, T.DECAY_PARAM: 0.002})        # must not raise
+    lr = T.make_model("logistic_regression", {"C": 0.3, T.DECAY_PARAM: 0.0})
+    assert lr.named_steps["logreg"].C == 0.3
+
+
+def test_tune_logreg_grid_is_deterministic_and_on_grid():
+    df = T.sort_chronological(make_matches(seasons=(2018, 2019, 2020, 2021), per_season=80))
+    plan = T.make_splits(df)
+    grid = {"C": (0.1, 1.0), T.DECAY_PARAM: (0.0, 0.001)}
+    a = T.tune_logreg(plan.df, plan.folds, grid)
+    assert a == T.tune_logreg(plan.df, plan.folds, grid)
+    assert a["C"] in grid["C"] and a[T.DECAY_PARAM] in grid[T.DECAY_PARAM]
