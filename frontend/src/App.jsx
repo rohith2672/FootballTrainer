@@ -1,8 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import TrackRecord from './components/TrackRecord'
 import News from './components/News'
-import { ROUTES, useHashRoute } from './hooks/useHashRoute'
+import TeamPage from './components/TeamPage'
+import TeamPicker from './components/TeamPicker'
+import MyTeamsMenu from './components/team/MyTeamsMenu'
+import { ROUTES, useRoute } from './hooks/useHashRoute'
+import './styles/team.css'
 
 const VIEWS = {
   upcoming: {
@@ -22,21 +26,37 @@ const VIEWS = {
   },
 }
 
+/** Header copy for the current route; team pages are not in the main tabs. */
+function viewFor(route) {
+  if (route.view === 'team') {
+    return {
+      badge: 'Team analysis',
+      title: route.team,
+      blurb: 'Form, Elo rating, results and match preparation for one team',
+    }
+  }
+  return VIEWS[route.view] ?? VIEWS.upcoming
+}
+
 function App() {
-  const route = useHashRoute()
-  const view = VIEWS[route]
+  const route = useRoute()
+  const view = viewFor(route)
   const mainRef = useRef(null)
   const firstRender = useRef(true)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const openPicker = useCallback(() => setPickerOpen(true), [])
+  const closePicker = useCallback(() => setPickerOpen(false), [])
+  const routeKey = `${route.view}|${route.team ?? ''}`
 
-  // After switching tabs, move focus to the content so keyboard and screen
-  // reader users land on the new view instead of the tab they just used.
+  // After switching views (or teams), move focus to the content so keyboard and
+  // screen reader users land on the new view instead of the link they just used.
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false
       return
     }
     mainRef.current?.focus({ preventScroll: true })
-  }, [route])
+  }, [routeKey])
 
   useEffect(() => {
     document.title = `${view.title} — Match Predictor`
@@ -48,27 +68,32 @@ function App() {
         <div className="header-badge">{view.badge}</div>
         <h1>Match Predictor</h1>
         <p>{view.blurb}</p>
-        <nav className="main-nav" aria-label="Main">
+        <nav className="main-nav with-teams" aria-label="Main">
           {Object.entries(VIEWS).map(([key, v]) => (
             <a
               key={key}
               href={ROUTES[key]}
-              className={`nav-tab ${route === key ? 'active' : ''}`}
-              aria-current={route === key ? 'page' : undefined}
+              className={`nav-tab ${route.view === key ? 'active' : ''}`}
+              aria-current={route.view === key ? 'page' : undefined}
             >
               {v.title}
             </a>
           ))}
+          <MyTeamsMenu currentTeam={route.team} onOpenPicker={openPicker} />
         </nav>
       </header>
       <main ref={mainRef} tabIndex={-1} className="main-content" aria-label={view.title}>
         {/* Kept mounted (hidden) so filters and loaded fixtures survive a tab switch. */}
-        <div hidden={route !== 'upcoming'}>
-          <Dashboard />
+        <div hidden={route.view !== 'upcoming'}>
+          <Dashboard onOpenPicker={openPicker} />
         </div>
-        {route === 'trackRecord' ? <TrackRecord /> : null}
-        {route === 'news' ? <News /> : null}
+        {route.view === 'trackRecord' ? <TrackRecord /> : null}
+        {route.view === 'news' ? <News onOpenPicker={openPicker} /> : null}
+        {route.view === 'team' ? (
+          <TeamPage key={route.team} name={route.team} onOpenPicker={openPicker} />
+        ) : null}
       </main>
+      <TeamPicker open={pickerOpen} onClose={closePicker} />
     </div>
   )
 }

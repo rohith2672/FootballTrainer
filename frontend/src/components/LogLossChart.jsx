@@ -1,42 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { fmtLogLoss, fmtShortDate, isNum, niceAxis } from '../lib/trackRecord';
-
-const HEIGHT = 300;
-const MARGIN = { top: 16, right: 18, bottom: 56, left: 58 };
-const DEFAULT_WIDTH = 640;
-const MIN_WIDTH = 280;
-
-/** Width of an element, kept current with ResizeObserver. */
-function useElementWidth() {
-  const ref = useRef(null);
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      setWidth(Math.max(MIN_WIDTH, Math.floor(entry.contentRect.width)));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
-
-/** Consecutive runs of non-null points, so gaps in the data break the line. */
-function segments(points) {
-  const out = [];
-  let run = [];
-  for (const p of points) {
-    if (p.y === null) {
-      if (run.length) out.push(run);
-      run = [];
-    } else run.push(p);
-  }
-  if (run.length) out.push(run);
-  return out;
-}
-
-const pathOf = (run) => run.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+import { useMemo } from 'react';
+import LineChart from './charts/LineChart';
+import { fmtLogLoss, fmtShortDate, isNum } from '../lib/trackRecord';
 
 function LegendSwatch() {
   return (
@@ -47,39 +11,50 @@ function LegendSwatch() {
   );
 }
 
+const LEGEND = (
+  <ul className="chart-legend" aria-label="Legend">
+    <li><LegendSwatch /> Model</li>
+  </ul>
+);
+
+const COLUMNS = [
+  { key: 'week', label: 'Week starting' },
+  { key: 'n', label: 'Matches', num: true },
+  { key: 'logLoss', label: 'Model log-loss', num: true },
+];
+
 /**
- * Per-week log-loss for the model. Hand-drawn SVG, no chart library. Lower is
+ * Per-week log-loss for the model, drawn with the shared LineChart. Lower is
  * better, which the axis title says explicitly.
  */
 function LogLossChart({ timeline }) {
-  const [wrapRef, width] = useElementWidth();
+  const points = useMemo(
+    () =>
+      timeline.map((t) => ({
+        key: t.weekStart,
+        xLabel: fmtShortDate(t.weekStart),
+        y: isNum(t.logLoss) ? t.logLoss : null,
+        tooltip: `Model, week of ${fmtShortDate(t.weekStart)}: log-loss ${fmtLogLoss(t.logLoss)} (${t.n} matches)`,
+      })),
+    [timeline],
+  );
 
-  const geometry = useMemo(() => {
-    const values = timeline.map((t) => t.logLoss).filter(isNum);
-    if (values.length === 0) return null;
-    const axis = niceAxis(Math.min(...values), Math.max(...values));
-    const innerW = width - MARGIN.left - MARGIN.right;
-    const innerH = HEIGHT - MARGIN.top - MARGIN.bottom;
-    const x = (i) =>
-      MARGIN.left + (timeline.length === 1 ? innerW / 2 : (i / (timeline.length - 1)) * innerW);
-    const y = (v) => MARGIN.top + innerH - ((v - axis.min) / (axis.max - axis.min)) * innerH;
-    const model = timeline.map((t, i) => ({
-      x: x(i),
-      y: isNum(t.logLoss) ? y(t.logLoss) : null,
-      value: t.logLoss,
-      week: t,
-    }));
-    const maxLabels = Math.max(2, Math.floor(innerW / 70));
-    const step = Math.ceil(timeline.length / maxLabels);
-    return { axis, y, x, innerH, innerW, model, labelStep: step };
-  }, [timeline, width]);
+  const table = useMemo(
+    () => ({
+      caption: 'Weekly model log-loss',
+      columns: COLUMNS,
+      rows: timeline.map((t) => ({
+        key: t.weekStart,
+        cells: [fmtShortDate(t.weekStart), t.n, fmtLogLoss(t.logLoss)],
+      })),
+    }),
+    [timeline],
+  );
 
-  if (!geometry) {
+  if (!timeline.length) {
     return <p className="explain-note">No weekly log-loss values to chart yet.</p>;
   }
 
-  const { axis, y, x, innerH, innerW, model, labelStep } = geometry;
-  const bottomY = MARGIN.top + innerH;
   const first = timeline[0].weekStart;
   const last = timeline[timeline.length - 1].weekStart;
   const desc =
@@ -87,106 +62,20 @@ function LogLossChart({ timeline }) {
     'Lower values are better. ' +
     'The same figures are available in the table below the chart.';
 
-  const tip = (p) =>
-    `Model, week of ${fmtShortDate(p.week.weekStart)}: log-loss ${fmtLogLoss(p.value)} (${p.week.n} matches)`;
-
   return (
-    <div className="chart-card">
-      <ul className="chart-legend" aria-label="Legend">
-        <li><LegendSwatch /> Model</li>
-      </ul>
-
-      <div className="chart-wrap" ref={wrapRef}>
-        <svg
-          width={width}
-          height={HEIGHT}
-          viewBox={`0 0 ${width} ${HEIGHT}`}
-          role="img"
-          aria-labelledby="chart-title chart-desc"
-          className="chart-svg"
-        >
-          <title id="chart-title">Weekly model log-loss</title>
-          <desc id="chart-desc">{desc}</desc>
-
-          {/* Gridlines and y axis */}
-          {axis.ticks.map((t) => (
-            <g key={t}>
-              <line x1={MARGIN.left} x2={MARGIN.left + innerW} y1={y(t)} y2={y(t)} className="chart-grid" />
-              <text x={MARGIN.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-tick">
-                {t.toFixed(2)}
-              </text>
-            </g>
-          ))}
-          <text
-            transform={`translate(14 ${MARGIN.top + innerH / 2}) rotate(-90)`}
-            textAnchor="middle"
-            className="chart-axis-title"
-          >
-            Log-loss (lower is better)
-          </text>
-
-          {/* X axis */}
-          <line x1={MARGIN.left} x2={MARGIN.left + innerW} y1={bottomY} y2={bottomY} className="chart-axis" />
-          {timeline.map((t, i) =>
-            i % labelStep === 0 ? (
-              <g key={t.weekStart}>
-                <line x1={x(i)} x2={x(i)} y1={bottomY} y2={bottomY + 5} className="chart-axis" />
-                <text x={x(i)} y={bottomY + 20} textAnchor="middle" className="chart-tick">
-                  {fmtShortDate(t.weekStart)}
-                </text>
-              </g>
-            ) : null,
-          )}
-          <text
-            x={MARGIN.left + innerW / 2}
-            y={HEIGHT - 8}
-            textAnchor="middle"
-            className="chart-axis-title"
-          >
-            Week starting
-          </text>
-
-          {/* Model series */}
-          {segments(model).map((run) => (
-            <path key={`m${run[0].week.weekStart}`} d={pathOf(run)} className="series-line model" />
-          ))}
-          {model.map((p) =>
-            p.y === null ? null : (
-              <g key={`mp${p.week.weekStart}`}>
-                <title>{tip(p)}</title>
-                <circle cx={p.x} cy={p.y} r="4.5" className="series-point model" />
-                <circle cx={p.x} cy={p.y} r="12" className="chart-hit" />
-              </g>
-            ),
-          )}
-        </svg>
-      </div>
-
-      <details className="chart-data">
-        <summary>Show chart data as a table</summary>
-        <div className="table-scroll">
-          <table className="data-table">
-            <caption className="sr-only">Weekly model log-loss</caption>
-            <thead>
-              <tr>
-                <th scope="col">Week starting</th>
-                <th scope="col" className="num">Matches</th>
-                <th scope="col" className="num">Model log-loss</th>
-              </tr>
-            </thead>
-            <tbody>
-              {timeline.map((t) => (
-                <tr key={t.weekStart}>
-                  <th scope="row">{fmtShortDate(t.weekStart)}</th>
-                  <td className="num">{t.n}</td>
-                  <td className="num">{fmtLogLoss(t.logLoss)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </div>
+    <LineChart
+      title="Weekly model log-loss"
+      desc={desc}
+      points={points}
+      seriesClass="model"
+      yFormat={(t) => t.toFixed(2)}
+      yAxisTitle="Log-loss (lower is better)"
+      xAxisTitle="Week starting"
+      minSpan={0.02}
+      legend={LEGEND}
+      table={table}
+      emptyMessage="No weekly log-loss values to chart yet."
+    />
   );
 }
 

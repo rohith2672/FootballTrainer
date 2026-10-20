@@ -1,0 +1,74 @@
+/* Reusable SVG line chart (components/charts/LineChart.jsx).
+   Builds on the .chart-* classes and tokens from index.css. */
+
+.lc-wrap {
+  position: relative;
+}
+
+.lc-svg {
+  /* Let the page scroll vertically over the chart on touch screens. */
+  touch-action: pan-y;
+  cursor: crosshair;
+  overflow: visible;
+}
+
+.lc-crosshair {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.lc-point {
+  outline: none;
+  cursor: pointer;
+}
+
+.lc-point:focus {
+  outline: none;
+}
+
+/* Drawn ring instead of outline: outlines on SVG elements are unreliable. */
+.lc-focus-ring {
+  fill: none;
+  stroke: var(--text-primary);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+
+.lc-point:focus-visible .lc-focus-ring {
+  stroke: var(--focus-ring);
+  stroke-width: 3;
+  opacity: 1;
+}
+
+.lc-tooltip {
+  position: absolute;
+  z-index: 2;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: rgba(6, 10, 19, 0.94);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.lc-tooltip.above {
+  transform: translateY(-100%);
+}
+
+/* Result markers (W / D / L): shape carries the meaning, colour supports it. */
+.lc-marker {
+  stroke: var(--bg-base);
+  stroke-width: 1.2;
+}
+
+.lc-marker.result-W { fill: var(--home); }
+.lc-marker.result-D { fill: var(--draw); }
+.lc-marker.result-L { fill: var(--away); }
+.lc-marker.result-none { fill: var(--series-model); }
+
+.series-line.elo { stroke: var(--series-model); stroke-width: 2; opacity: 0.85; }
