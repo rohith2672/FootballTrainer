@@ -108,7 +108,7 @@
 }
 
 .fav-star.on {
-  color: var(--negative-bar);
+  color: var(--star);
 }
 
 .fav-star[aria-disabled='true'] {
@@ -124,6 +124,7 @@
 .my-teams-section {
   margin: 0 0 2rem;
   padding: 1.25rem;
+  box-shadow: var(--card-shadow);
   background: var(--bg-surface);
   border: 1px solid var(--border-accent);
   border-radius: var(--radius-lg);
@@ -139,6 +140,9 @@
 }
 
 .my-teams-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-family: 'Outfit', sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
@@ -249,37 +253,7 @@
   gap: 0.6rem 1rem;
 }
 
-.segmented {
-  display: inline-flex;
-  padding: 3px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-full);
-}
-
-.segmented .segment {
-  min-height: 44px;
-  min-width: 88px;
-  padding: 0 1.1rem;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-}
-
-.segmented .segment:hover:not([aria-disabled='true']) {
-  color: var(--text-primary);
-}
-
-.segmented .segment.active {
-  color: #fff;
-  background: var(--accent-vivid);
-}
-
+/* .segmented itself lives in index.css. */
 .segmented .segment[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.55;
@@ -290,18 +264,6 @@
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text-secondary);
-}
-
-.link-button {
-  min-height: 24px;
-  padding: 0;
-  font: inherit;
-  color: var(--accent);
-  background: none;
-  border: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
 }
 
 .news-card.mentions-favourite {

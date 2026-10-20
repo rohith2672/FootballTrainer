@@ -48,7 +48,7 @@
   font-size: 0.78rem;
   line-height: 1.4;
   color: var(--text-primary);
-  background: rgba(6, 10, 19, 0.94);
+  background: var(--tooltip-bg);
   border: 1px solid var(--border-accent);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);

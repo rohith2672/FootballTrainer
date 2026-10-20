@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { outcomeLabel } from '../lib/matches';
+import { ChevronDownIcon } from './icons';
 import {
   DETAIL_ROWS,
   fmtContribution,
@@ -99,7 +100,7 @@ function ExplanationPanel({ match, factors, details }) {
         onClick={() => setOpen((o) => !o)}
       >
         <span>{label}</span>
-        <span className="explain-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
+        <ChevronDownIcon up={open} size={18} className="explain-chevron" />
       </button>
       <div id={panelId} className="explain-body" hidden={!open}>
         {factors.length > 0 ? <Factors match={match} factors={factors} /> : null}

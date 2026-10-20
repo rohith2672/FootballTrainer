@@ -3,7 +3,9 @@ import { useNews } from '../hooks/useNews';
 import { useFavourites } from '../hooks/useFavourites';
 import { mentionedTeams, publicationAge } from '../lib/news';
 import { shortTeamName, teamHref } from '../lib/teams';
+import { StarIcon } from './icons';
 import '../styles/favourites.css';
+import '../styles/news.css';
 
 function DateTime({ value, fallback = 'Not yet available' }) {
   return value ? <time dateTime={value}>{new Date(value).toLocaleString()}</time> : fallback;
@@ -71,12 +73,12 @@ export default function News({ onOpenPicker }) {
               if (hasFavourites) setMode('mine');
             }}
           >
-            <span aria-hidden="true">★ </span>My teams
+            <StarIcon filled size={15} />My teams
           </button>
         </div>
         {hasFavourites ? null : (
           <p className="news-filter-hint" id="news-mine-hint">
-            Follow teams to filter headlines: tap the <span aria-hidden="true">☆</span>
+            Follow teams to filter headlines: tap the <StarIcon size={15} className="inline-icon" />
             <span className="sr-only">star</span> next to a team on a match card
             {onOpenPicker ? ' or ' : '.'}
             {onOpenPicker ? (
@@ -136,7 +138,7 @@ export default function News({ onOpenPicker }) {
                       {tags.map((name) => (
                         <li key={name}>
                           <a className="team-tag" href={teamHref(name)}>
-                            <span aria-hidden="true">★ </span>
+                            <StarIcon filled size={13} />
                             {shortTeamName(name)}
                             <span className="sr-only"> team page</span>
                           </a>

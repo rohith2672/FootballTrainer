@@ -13,6 +13,7 @@ import SeasonCard from './team/SeasonCard';
 import TeamHeader from './team/TeamHeader';
 import TeamNews from './team/TeamNews';
 import { Skeleton } from './team/common';
+import { AlertIcon, SearchIcon } from './icons';
 import '../styles/team.css';
 
 function PageSkeleton({ name }) {
@@ -40,7 +41,7 @@ function PageError({ name, error, onRetry, onOpenPicker, loading }) {
   return (
     <div className="team-page">
       <div className="error-card team-error" role="alert">
-        <div className="error-icon" aria-hidden="true">{notFound ? '🔍' : '⚠️'}</div>
+        <div className="error-icon">{notFound ? <SearchIcon size={40} /> : <AlertIcon size={40} />}</div>
         <h2>{title}</h2>
         <p>{notFound ? `We couldn’t find a team called “${name}”. Check the name or pick a team from the list.` : message}</p>
         <div className="team-error-actions">

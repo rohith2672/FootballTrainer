@@ -1,0 +1,428 @@
+/* ============================================================
+   APP SHELL: top bar, main nav (bottom tab bar on phones), theme
+   toggle, hero, icons and league badges. Tokens: index.css :root.
+   Breakpoints: 360 / 480 / 640 (tab bar) / 768 / 1100.
+   ============================================================ */
+
+/* --- Icons --- */
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.inline-icon {
+  vertical-align: -0.15em;
+}
+
+.with-icon .star-icon,
+.fav-badge .icon,
+.tp-primary-tag .icon,
+.team-tag .icon {
+  color: var(--star);
+}
+
+/* --- League badge (components/icons/LeagueBadge.jsx) --- */
+.lg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  color: var(--on-accent);
+  background: var(--league-other);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--league-ring);
+}
+
+.lg-sm { min-width: 26px; height: 20px; padding: 0 0.3rem; font-size: 0.66rem; border-radius: 5px; }
+.lg-md { min-width: 32px; height: 24px; padding: 0 0.35rem; font-size: 0.75rem; }
+.lg-lg { min-width: 48px; height: 40px; padding: 0 0.5rem; font-size: 1.05rem; border-radius: 10px; }
+
+.lg-PL { background: var(--league-PL); }
+.lg-PD { background: var(--league-PD); }
+.lg-SA { background: var(--league-SA); }
+.lg-BL1 { background: var(--league-BL1); }
+.lg-FL1 { background: var(--league-FL1); }
+.lg-CL { background: var(--league-CL); }
+
+.match-row-comp,
+.prep-comp,
+.picker-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.picker-group-title {
+  display: flex;
+}
+
+/* Cards get a soft shadow in the light theme (none in dark). */
+.filters,
+.stats-bar,
+.empty-state,
+.metric-tile,
+.chart-card,
+.recent-item {
+  box-shadow: var(--card-shadow);
+}
+
+/* --- Skip link --- */
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent-vivid);
+  border-radius: var(--radius-sm);
+  transform: translateY(-150%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+/* --- Header / top bar --- */
+.app-header {
+  position: relative;
+  z-index: 30; /* above cards so the "My teams" menu is never covered */
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 0.6rem var(--gutter);
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-subtle);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  margin-right: auto;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+
+.brand-mark {
+  color: var(--accent);
+}
+
+.brand:hover .brand-name {
+  color: var(--accent);
+}
+
+/* --- Main nav (top bar on wide screens) --- */
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+}
+
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 1.05rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+}
+
+.nav-tab.active {
+  color: var(--on-accent);
+  background: var(--active-gradient);
+}
+
+.nav-icon {
+  opacity: 0.9;
+}
+
+/* Medium widths: the tabs get their own centred row under brand + toggle
+   (the zero-height ::after forces the line break). */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .topbar::after {
+    content: '';
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .topbar .main-nav {
+    order: 3;
+    margin: 0 auto;
+  }
+}
+
+/* --- Theme toggle --- */
+.theme-toggle {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+}
+
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.theme-btn:hover {
+  color: var(--text-primary);
+}
+
+.theme-btn.active {
+  color: var(--on-accent);
+  background: var(--accent-vivid);
+}
+
+/* --- Hero (Upcoming only) and compact page title --- */
+.hero {
+  padding: 2.75rem 0 1.75rem;
+  text-align: center;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-soft-text);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-full);
+  margin-bottom: 1.1rem;
+}
+
+.hero h1 {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(2.1rem, 5vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-primary);
+  background: var(--title-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.75rem;
+}
+
+/* Gradient text disappears in forced-colours mode; fall back to plain text. */
+@media (forced-colors: active) {
+  .hero h1 {
+    -webkit-text-fill-color: currentColor;
+    background: none;
+  }
+}
+
+.hero p {
+  max-width: 540px;
+  margin: 0 auto;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.page-title {
+  padding: 1.5rem 0 1.1rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+/* --- League pills: one horizontally scrolling row on narrow screens --- */
+.league-selector {
+  scrollbar-width: thin;
+}
+
+@media (max-width: 768px) {
+  .league-selector {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    margin: 0 calc(-1 * var(--gutter)) 1.25rem;
+    /* Room for the active pill's lift and focus ring inside the scroller. */
+    padding: 6px var(--gutter) 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--gutter);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .league-pill {
+    flex: 0 0 auto;
+  }
+
+  .league-pill.active {
+    transform: none;
+  }
+
+  .hero {
+    padding: 1.75rem 0 1.25rem;
+  }
+}
+
+/* ============================================================
+   PHONES: bottom tab bar (<= 640px)
+   ============================================================ */
+@media (max-width: 640px) {
+  :root {
+    --bottom-nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .topbar {
+    /* backdrop-filter would make the bar the containing block of the fixed
+       tab bar inside it, pinning the tab bar to the top. */
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    gap: 0.5rem;
+    padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.5rem;
+  }
+
+  .main-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    justify-content: space-around;
+    gap: 0;
+    padding: 0 max(0.25rem, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
+      max(0.25rem, env(safe-area-inset-left, 0px));
+    background: var(--bg-base);
+    border: 0;
+    border-top: 1px solid var(--border-light);
+    border-radius: 0;
+    box-shadow: var(--shadow-md);
+  }
+
+  .main-nav > .nav-tab,
+  .main-nav > .nav-teams {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .main-nav .nav-tab {
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+    width: 100%;
+    min-height: 60px;
+    padding: 0.35rem 0.2rem;
+    font-size: 0.7rem;
+    border-radius: 0;
+  }
+
+  .main-nav .nav-tab.active {
+    color: var(--accent);
+    background: transparent;
+  }
+
+  .main-nav .nav-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 3px 3px;
+  }
+
+  .main-nav .nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The "My teams" menu opens upward, full width, above the tab bar. */
+  .main-nav .nav-teams {
+    position: static;
+  }
+
+  .main-nav .nav-teams-count {
+    position: absolute;
+    top: 6px;
+    left: calc(50% + 6px);
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.65rem;
+  }
+
+  .main-nav .nav-teams-chevron {
+    display: none;
+  }
+
+  .main-nav .nav-teams-menu {
+    top: auto;
+    bottom: calc(100% + 8px);
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .brand {
+    gap: 0.4rem;
+    font-size: 1.02rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .nav-tab,
+  .theme-btn {
+    transition: none;
+  }
+}

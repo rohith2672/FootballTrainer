@@ -1,52 +1,78 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import TrackRecord from './components/TrackRecord'
 import News from './components/News'
 import TeamPage from './components/TeamPage'
 import TeamPicker from './components/TeamPicker'
+import ThemeToggle from './components/ThemeToggle'
 import MyTeamsMenu from './components/team/MyTeamsMenu'
-import { ROUTES, useRoute } from './hooks/useHashRoute'
+import { BallIcon, CalendarIcon, ChartIcon, NewsIcon } from './components/icons'
+import { ROUTES, useLocationHash } from './hooks/useHashRoute'
+import { parseRoute } from './lib/routes.js'
 import './styles/team.css'
+import './styles/shell.css'
 
 const VIEWS = {
   upcoming: {
-    badge: 'Upcoming predictions',
     title: 'Upcoming',
+    heading: 'Upcoming',
     blurb: "Model-based outcome probabilities for upcoming fixtures in Europe's top football leagues",
+    Icon: CalendarIcon,
   },
   trackRecord: {
-    badge: 'Track record',
     title: 'Track record',
-    blurb: 'How the model’s saved pre-match predictions have scored against results and simple baselines',
+    heading: 'Track record',
+    Icon: ChartIcon,
   },
   news: {
-    badge: 'Football news',
     title: 'News',
-    blurb: 'The latest football headlines, checked every hour',
+    heading: 'News',
+    Icon: NewsIcon,
   },
 }
 
-/** Header copy for the current route; team pages are not in the main tabs. */
+/** Document title and page heading for the current route. */
 function viewFor(route) {
-  if (route.view === 'team') {
-    return {
-      badge: 'Team analysis',
-      title: route.team,
-      blurb: 'Form, Elo rating, results and match preparation for one team',
-    }
-  }
+  if (route.view === 'team') return { title: route.team, heading: 'Team analysis' }
   return VIEWS[route.view] ?? VIEWS.upcoming
 }
 
+function NavLink({ viewKey, href, current }) {
+  const { title, Icon } = VIEWS[viewKey]
+  return (
+    <a
+      href={href}
+      className={`nav-tab ${current ? 'active' : ''}`}
+      aria-current={current ? 'page' : undefined}
+    >
+      <Icon size={18} className="nav-icon" />
+      <span className="nav-label">{title}</span>
+    </a>
+  )
+}
+
 function App() {
-  const route = useRoute()
+  const hash = useLocationHash()
+  const route = useMemo(() => parseRoute(hash), [hash])
   const view = viewFor(route)
+  const isHome = route.view === 'upcoming'
   const mainRef = useRef(null)
   const firstRender = useRef(true)
   const [pickerOpen, setPickerOpen] = useState(false)
   const openPicker = useCallback(() => setPickerOpen(true), [])
   const closePicker = useCallback(() => setPickerOpen(false), [])
+  // Path only: filter changes in the query must not move focus.
   const routeKey = `${route.view}|${route.team ?? ''}`
+
+  // Mount the dashboard on first visit only (so other routes don't fetch
+  // /upcoming), then keep it mounted so loaded fixtures survive a tab switch.
+  // Its filters live in the hash query; remember the last Upcoming hash so the
+  // nav link returns to the same filters.
+  const [dashboardMounted, setDashboardMounted] = useState(isHome)
+  const [upcomingHash, setUpcomingHash] = useState(isHome ? hash : ROUTES.upcoming)
+  if (isHome && !dashboardMounted) setDashboardMounted(true)
+  if (isHome && hash !== upcomingHash) setUpcomingHash(hash)
+  const upcomingHref = upcomingHash || ROUTES.upcoming
 
   // After switching views (or teams), move focus to the content so keyboard and
   // screen reader users land on the new view instead of the link they just used.
@@ -64,29 +90,49 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="header">
-        <div className="header-badge">{view.badge}</div>
-        <h1>Match Predictor</h1>
-        <p>{view.blurb}</p>
-        <nav className="main-nav with-teams" aria-label="Main">
-          {Object.entries(VIEWS).map(([key, v]) => (
-            <a
-              key={key}
-              href={ROUTES[key]}
-              className={`nav-tab ${route.view === key ? 'active' : ''}`}
-              aria-current={route.view === key ? 'page' : undefined}
-            >
-              {v.title}
-            </a>
-          ))}
-          <MyTeamsMenu currentTeam={route.team} onOpenPicker={openPicker} />
-        </nav>
-      </header>
-      <main ref={mainRef} tabIndex={-1} className="main-content" aria-label={view.title}>
-        {/* Kept mounted (hidden) so filters and loaded fixtures survive a tab switch. */}
-        <div hidden={route.view !== 'upcoming'}>
-          <Dashboard onOpenPicker={openPicker} />
+      <a className="skip-link" href="#main-content" onClick={(e) => {
+        // Hash routing: focus the content instead of navigating to "#main-content".
+        e.preventDefault()
+        mainRef.current?.focus()
+      }}>
+        Skip to content
+      </a>
+      <header className={`app-header ${isHome ? 'is-home' : 'is-compact'}`}>
+        <div className="topbar">
+          <a className="brand" href={upcomingHref} aria-label="Match Predictor, upcoming fixtures">
+            <BallIcon size={26} className="brand-mark" />
+            <span className="brand-name">Match Predictor</span>
+          </a>
+          <nav className="main-nav" aria-label="Main">
+            <NavLink viewKey="upcoming" href={upcomingHref} current={isHome} />
+            <MyTeamsMenu currentTeam={route.team} onOpenPicker={openPicker} />
+            <NavLink viewKey="trackRecord" href={ROUTES.trackRecord} current={route.view === 'trackRecord'} />
+            <NavLink viewKey="news" href={ROUTES.news} current={route.view === 'news'} />
+          </nav>
+          <ThemeToggle />
         </div>
+        {isHome ? (
+          <div className="hero">
+            <div className="header-badge">Upcoming predictions</div>
+            <h1>Match Predictor</h1>
+            <p>{view.blurb}</p>
+          </div>
+        ) : (
+          <h1 className="page-title">{view.heading}</h1>
+        )}
+      </header>
+      <main
+        ref={mainRef}
+        id="main-content"
+        tabIndex={-1}
+        className="main-content"
+        aria-label={view.title}
+      >
+        {dashboardMounted ? (
+          <div hidden={!isHome}>
+            <Dashboard routeHash={upcomingHash} onOpenPicker={openPicker} />
+          </div>
+        ) : null}
         {route.view === 'trackRecord' ? <TrackRecord /> : null}
         {route.view === 'news' ? <News onOpenPicker={openPicker} /> : null}
         {route.view === 'team' ? (

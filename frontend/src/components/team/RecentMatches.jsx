@@ -12,6 +12,7 @@ import {
   plural,
 } from '../../lib/teamPage.js';
 import { Card, ResultChip, SectionNotice, Skeleton, TeamLink } from './common';
+import LeagueBadge from '../icons/LeagueBadge';
 
 function VenueFilter({ venue, onChange, disabled }) {
   return (
@@ -41,7 +42,7 @@ function MatchRow({ row }) {
       <div className="match-row-meta">
         <time dateTime={row.date}>{fmtDate(row.date)}</time>
         <span className="match-row-comp" title={competition.name}>
-          <span aria-hidden="true">{competition.emoji} </span>
+          <LeagueBadge code={row.league} size="sm" />
           {competition.name}
         </span>
       </div>

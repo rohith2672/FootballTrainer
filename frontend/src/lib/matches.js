@@ -5,17 +5,19 @@
 
 export const ALL_LEAGUES = 'ALL';
 
+// `short` is the text shown in league badges (components/icons/LeagueBadge);
+// each known code has a colour token (--league-<code>) in index.css.
 export const LEAGUES = {
-  PL: { name: 'Premier League', emoji: '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}' },
-  PD: { name: 'La Liga', emoji: '\u{1F1EA}\u{1F1F8}' },
-  SA: { name: 'Serie A', emoji: '\u{1F1EE}\u{1F1F9}' },
-  BL1: { name: 'Bundesliga', emoji: '\u{1F1E9}\u{1F1EA}' },
-  FL1: { name: 'Ligue 1', emoji: '\u{1F1EB}\u{1F1F7}' },
-  CL: { name: 'Champions League', emoji: '\u{1F3C6}' },
+  PL: { name: 'Premier League', short: 'PL' },
+  PD: { name: 'La Liga', short: 'LL' },
+  SA: { name: 'Serie A', short: 'SA' },
+  BL1: { name: 'Bundesliga', short: 'BL' },
+  FL1: { name: 'Ligue 1', short: 'L1' },
+  CL: { name: 'Champions League', short: 'CL' },
 };
 
 export function leagueInfo(code) {
-  return LEAGUES[code] ?? { name: code || 'Other', emoji: '⚽' };
+  return LEAGUES[code] ?? { name: code || 'Other', short: String(code || '?').slice(0, 3).toUpperCase() };
 }
 
 const pad = (n) => String(n).padStart(2, '0');

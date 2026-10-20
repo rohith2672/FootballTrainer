@@ -29,18 +29,6 @@
   font-size: 0.8rem;
 }
 
-.link-btn {
-  min-height: 44px;
-  padding: 0 0.25rem;
-  font: inherit;
-  color: var(--accent);
-  background: none;
-  border: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -64,7 +52,7 @@
   color: var(--text-primary);
   font-weight: 600;
   text-decoration: underline;
-  text-decoration-color: rgba(96, 165, 250, 0.5);
+  text-decoration-color: var(--accent-underline);
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
 }
@@ -73,21 +61,13 @@
   color: var(--accent);
 }
 
+/* Colours come from the shared .badge rule in index.css. */
 .tp-primary-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
   min-height: 28px;
   padding: 0.15rem 0.65rem;
   font-size: 0.72rem;
-  font-weight: 700;
   letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: #fde68a;
-  background: rgba(251, 191, 36, 0.12);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  border-radius: var(--radius-full);
-  white-space: nowrap;
 }
 
 .tp-primary-tag.small {
@@ -122,9 +102,9 @@
 }
 
 .star-toggle.on {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.1);
-  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--star);
+  background: var(--star-bg);
+  border-color: var(--star-border);
 }
 
 .star-toggle:disabled {
@@ -158,11 +138,11 @@
   height: 26px;
 }
 
-.r-W { color: #04121f; background: var(--home); }
-.r-D { color: #0b1120; background: var(--draw); }
+.r-W { color: var(--on-home); background: var(--home); }
+.r-D { color: var(--on-draw); background: var(--draw); }
 .r-L {
-  color: #1a0b00;
-  background: repeating-linear-gradient(135deg, var(--away) 0 5px, #f97316 5px 8px);
+  color: var(--on-away);
+  background: repeating-linear-gradient(135deg, var(--away) 0 5px, var(--away-stripe) 5px 8px);
 }
 
 .result-chip.none {
@@ -197,8 +177,8 @@
   flex-shrink: 0;
 }
 
-.venue-chip.home { border-color: rgba(56, 189, 248, 0.5); }
-.venue-chip.away { border-style: dashed; border-color: rgba(251, 146, 60, 0.6); }
+.venue-chip.home { border-color: var(--home-border); }
+.venue-chip.away { border-style: dashed; border-color: var(--away-border); }
 
 .elo-change.up::before,
 .match-row-elo.up::before { content: '▲ '; font-size: 0.7em; }
@@ -216,7 +196,7 @@
   display: block;
   height: 14px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  background: linear-gradient(90deg, var(--skeleton-a), var(--skeleton-b), var(--skeleton-a));
   background-size: 200% 100%;
   animation: team-shimmer 1.4s ease-in-out infinite;
 }
@@ -228,22 +208,6 @@
 @keyframes team-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
-}
-
-.section-notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0.7rem 0.9rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: var(--text-primary);
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  border-radius: var(--radius-md);
 }
 
 .is-stale {
@@ -270,8 +234,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--card-shadow);
 }
 
 .team-card[aria-busy='true'] > :not(.team-card-head) {
@@ -301,8 +264,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--card-shadow);
 }
 
 .team-title-row {
@@ -339,11 +301,11 @@
 .league-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.75rem;
+  gap: 0.45rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.3rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #bfdbfe;
+  color: var(--accent-soft-text);
   background: var(--accent-glow);
   border: 1px solid var(--border-accent);
   border-radius: var(--radius-full);
@@ -366,7 +328,7 @@
 .team-stat {
   min-width: 0;
   padding: 0.75rem 0.8rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -459,7 +421,7 @@
   font-size: 0.88rem;
   line-height: 1.55;
   color: var(--text-secondary);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -508,16 +470,7 @@
 
 .prep-empty {
   padding: 1rem;
-  font-size: 0.9rem;
   line-height: 1.6;
-  color: var(--text-secondary);
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px dashed var(--border-light);
-  border-radius: var(--radius-md);
-}
-
-.prep-empty strong {
-  color: var(--text-primary);
 }
 
 /* --- Elo chart card --- */
@@ -537,9 +490,8 @@
 
 .team-card .chart-card {
   padding: 0.6rem 0.4rem 0.5rem;
-  background: rgba(0, 0, 0, 0.18);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: var(--bg-inset);
+  box-shadow: none;
 }
 
 /* --- Season and averages --- */
@@ -554,7 +506,7 @@
 .season-tile {
   min-width: 0;
   padding: 0.6rem 0.7rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -585,7 +537,7 @@
 }
 
 .season-table .row-total {
-  background: rgba(96, 165, 250, 0.08);
+  background: var(--accent-row);
 }
 
 .avg-grid {
@@ -597,7 +549,7 @@
 .avg-item {
   min-width: 0;
   padding: 0.6rem 0.7rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -620,38 +572,7 @@
   color: var(--text-muted);
 }
 
-/* --- Recent matches --- */
-.tp-segmented {
-  display: inline-flex;
-  padding: 0.2rem;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-full);
-}
-
-.tp-segmented-btn {
-  min-width: 56px;
-  min-height: 44px;
-  padding: 0 0.85rem;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-}
-
-.tp-segmented-btn:hover {
-  color: var(--text-primary);
-}
-
-.tp-segmented-btn.active {
-  color: #fff;
-  background: var(--accent-vivid);
-}
-
+/* --- Recent matches (venue filter: .tp-segmented in index.css) --- */
 .match-rows {
   display: grid;
   list-style: none;
@@ -800,25 +721,13 @@
 }
 
 /* ============================================================
-   MAIN NAV + "MY TEAMS" MENU
+   "MY TEAMS" NAV MENU (nav layout itself: styles/shell.css)
    ============================================================ */
-.main-nav.with-teams {
-  /* The nav's backdrop-filter makes it a stacking context; lift it above the
-     (also blurred) cards below so the "My teams" menu is not covered. */
-  position: relative;
-  z-index: 30;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-width: 100%;
-  border-radius: var(--radius-lg);
-}
-
 .nav-teams {
   position: relative;
 }
 
 .nav-teams-btn {
-  gap: 0.4rem;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 600;
@@ -836,13 +745,9 @@
   padding: 0 0.35rem;
   font-size: 0.7rem;
   font-weight: 700;
-  color: #0b1120;
-  background: #fbbf24;
+  color: var(--on-star);
+  background: var(--star);
   border-radius: var(--radius-full);
-}
-
-.nav-teams-chevron {
-  font-size: 0.75rem;
 }
 
 .nav-teams-menu {
@@ -853,7 +758,7 @@
   width: min(300px, calc(100vw - 32px));
   padding: 0.5rem;
   text-align: left;
-  background: rgba(11, 17, 32, 0.98);
+  background: var(--bg-menu);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
@@ -887,7 +792,14 @@
 
 .nav-teams-link:hover,
 .nav-teams-link[aria-current='page'] {
-  background: rgba(37, 99, 235, 0.22);
+  background: var(--accent-hover-bg);
+}
+
+.nav-teams-fixtures {
+  margin-top: 0.25rem;
+  color: var(--accent);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
 .nav-teams-name {
@@ -923,7 +835,7 @@
 }
 
 .team-picker::backdrop {
-  background: rgba(2, 6, 14, 0.72);
+  background: var(--backdrop);
   backdrop-filter: blur(4px);
 }
 
@@ -1063,20 +975,7 @@
 /* ============================================================
    WIDER SCREENS
    ============================================================ */
-@media (min-width: 560px) {
-  .team-stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .team-stat-form {
-    grid-column: auto;
-  }
-
-  .season-tiles,
-  .model-tiles {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
+@media (min-width: 481px) {
   .avg-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1097,14 +996,27 @@
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 769px) {
   .team-card,
   .team-header {
     padding: 1.4rem 1.5rem;
   }
+
+  .team-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .team-stat-form {
+    grid-column: auto;
+  }
+
+  .season-tiles,
+  .model-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1100px) {
   .team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.25rem;
@@ -1129,19 +1041,7 @@
   }
 }
 
-@media (min-width: 1200px) {
-  .season-tiles,
-  .model-tiles {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 480px) {
-  .main-nav.with-teams .nav-tab {
-    padding: 0 0.8rem;
-    font-size: 0.85rem;
-  }
-
   .match-row-main {
     gap: 0.4rem;
     font-size: 0.88rem;

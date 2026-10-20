@@ -1,4 +1,5 @@
 import ExplanationPanel from './ExplanationPanel';
+import { CalendarIcon, StarIcon } from './icons';
 import { useFavourites } from '../hooks/useFavourites';
 import { explanationContent } from '../lib/explain';
 import { MAX_FAVOURITES } from '../lib/favourites';
@@ -37,7 +38,7 @@ function FavouriteStar({ name, on, full, onToggle }) {
         if (!blocked) onToggle(name);
       }}
     >
-      <span aria-hidden="true">{on ? '★' : '☆'}</span>
+      <StarIcon filled={on} size={22} />
     </button>
   );
 }
@@ -69,8 +70,10 @@ function TeamTools({ match, side, name, favourites }) {
  * One fixture. The "why this prediction" disclosure renders in the details
  * region when the API supplied top_factors / details; `children` render after it.
  * `id` (optional) is set on the article so other controls can scroll to it.
+ * `index` (optional) is the card's position in its grid; it staggers the
+ * entrance animation (capped in CSS).
  */
-function MatchCard({ match, headingLevel = 4, id, children }) {
+function MatchCard({ match, headingLevel = 4, id, index, children }) {
   const favourites = useFavourites();
   const kickoff = formatKickoff(match);
   const Heading = `h${headingLevel}`;
@@ -91,15 +94,16 @@ function MatchCard({ match, headingLevel = 4, id, children }) {
       data-favourite={isFav || undefined}
       id={id}
       tabIndex={id ? -1 : undefined}
+      style={Number.isInteger(index) ? { '--i': index } : undefined}
     >
       <div className="match-card-top">
         <div className="match-date">
-          <span className="date-icon" aria-hidden="true">{'\u{1F4C5}'}</span>
+          <CalendarIcon size={15} className="date-icon" />
           <time dateTime={kickoff.iso}>{kickoff.text}</time>
         </div>
         {isFav ? (
           <span className="fav-badge">
-            <span aria-hidden="true">★</span> {homeFav && awayFav ? 'Your teams' : 'Your team'}
+            <StarIcon filled size={13} /> {homeFav && awayFav ? 'Your teams' : 'Your team'}
           </span>
         ) : null}
       </div>

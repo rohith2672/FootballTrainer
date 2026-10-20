@@ -3,10 +3,11 @@ import { describeTeamError } from '../api';
 import { useFavourites } from '../hooks/useFavourites';
 import { useTeamsIndex } from '../hooks/useTeamsIndex';
 import { MAX_FAVOURITES } from '../lib/favourites.js';
-import { leagueInfo } from '../lib/matches.js';
 import { groupTeamsByLeague, searchTeams, teamHref } from '../lib/teams.js';
 import { focusableWithin, orderFavourites, pickerCountText, pickerResultsText } from '../lib/picker.js';
 import StarToggle from './team/StarToggle';
+import LeagueBadge from './icons/LeagueBadge';
+import { CrossIcon, StarIcon } from './icons';
 import '../styles/team.css';
 
 function YourTeams({ favourites, onNavigate }) {
@@ -31,7 +32,7 @@ function YourTeams({ favourites, onNavigate }) {
             </a>
             {name === primary ? (
               <span className="tp-primary-tag">
-                <span aria-hidden="true">★ </span>Primary
+                <StarIcon filled size={13} />Primary
               </span>
             ) : (
               <button
@@ -139,12 +140,11 @@ function PickerBody({ onClose }) {
     );
   } else {
     results = groups.map((group) => {
-      const info = group.league ? leagueInfo(group.league) : null;
       const headingId = `${searchId}-${group.league ?? 'other'}`;
       return (
         <section key={group.league ?? 'other'} className="picker-section" aria-labelledby={headingId}>
           <h3 id={headingId} className="picker-group-title">
-            {info ? <span aria-hidden="true">{info.emoji} </span> : null}
+            {group.league ? <LeagueBadge code={group.league} size="sm" /> : null}
             {group.label}
           </h3>
           <ul className="picker-list">
@@ -176,7 +176,7 @@ function PickerBody({ onClose }) {
         <div className="picker-head">
           <h2 id={titleId} className="picker-title">Choose your teams</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close team picker">
-            <span aria-hidden="true">✕</span>
+            <CrossIcon size={18} />
           </button>
         </div>
         <p id={descId} className="picker-count" aria-live="polite">

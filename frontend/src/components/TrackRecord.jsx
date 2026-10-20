@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import LogLossChart from './LogLossChart';
+import LeagueBadge from './icons/LeagueBadge';
+import { AlertIcon, ChartIcon, CheckIcon, CrossIcon, GlobeIcon } from './icons';
 import { useTrackRecord } from '../hooks/useTrackRecord';
 import { describeTrackRecordError } from '../api';
 import { ALL_LEAGUES, LEAGUES, leagueInfo } from '../lib/matches';
@@ -132,7 +134,7 @@ function Recent({ rows }) {
                 </span>
                 {r.correct === true || r.correct === false ? (
                   <span className={`verdict ${r.correct ? 'yes' : 'no'}`}>
-                    <span aria-hidden="true">{r.correct ? '✓' : '✗'}</span>{' '}
+                    {r.correct ? <CheckIcon size={14} /> : <CrossIcon size={14} />}
                     {r.correct ? 'Correct' : 'Incorrect'}
                   </span>
                 ) : null}
@@ -206,7 +208,7 @@ function TrackRecord() {
       <div className="league-selector" role="group" aria-label="League">
         {[ALL_LEAGUES, ...Object.keys(LEAGUES)].map((code) => {
           const isAll = code === ALL_LEAGUES;
-          const info = isAll ? { name: 'All leagues', emoji: '\u{1F30D}' } : leagueInfo(code);
+          const info = isAll ? { name: 'All leagues' } : leagueInfo(code);
           return (
             <button
               type="button"
@@ -216,7 +218,11 @@ function TrackRecord() {
               aria-label={info.name}
               onClick={() => setLeague(code)}
             >
-              <span className="league-emoji" aria-hidden="true">{info.emoji}</span>
+              {isAll ? (
+                <span className="pill-icon"><GlobeIcon size={18} /></span>
+              ) : (
+                <LeagueBadge code={code} size="sm" />
+              )}
               <span className="league-name">{info.name}</span>
             </button>
           );
@@ -243,7 +249,7 @@ function TrackRecord() {
     const { title, message } = describeTrackRecordError(error);
     body = (
       <div className="error-card" role="alert">
-        <div className="error-icon" aria-hidden="true">{'⚠️'}</div>
+        <div className="error-icon"><AlertIcon size={40} /></div>
         <h2>{title}</h2>
         <p>{message}</p>
         <button type="button" className="btn btn-primary" onClick={reload}>
@@ -288,7 +294,7 @@ function TrackRecord() {
           </>
         ) : (
           <div className="empty-state">
-            <div className="empty-icon" aria-hidden="true">{'\u{1F4CA}'}</div>
+            <div className="empty-icon"><ChartIcon size={44} /></div>
             <h2>No settled live predictions yet</h2>
             <p>
               The model’s live record is built from predictions saved before kickoff and scored once

@@ -14,6 +14,7 @@ import {
   restGapText,
 } from '../../lib/teamPage.js';
 import { Card, ResultChip, Skeleton, TeamLink } from './common';
+import LeagueBadge from '../icons/LeagueBadge';
 
 // Same thresholds and classes as the fixture cards on the Upcoming page.
 const MIN_LABEL_SHARE = 0.14;
@@ -133,8 +134,8 @@ function MatchPrep({ profile }) {
         <p className="prep-when">
           <time dateTime={kickoff.iso}>{kickoff.text}</time>
           <span aria-hidden="true"> · </span>
-          <span>
-            <span aria-hidden="true">{competition.emoji} </span>
+          <span className="prep-comp">
+            <LeagueBadge code={match.league} size="sm" />
             {competition.name}
           </span>
         </p>

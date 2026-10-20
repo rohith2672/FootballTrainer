@@ -3,6 +3,8 @@ import { leagueInfo } from '../../lib/matches.js';
 import { DASH, formatAverage, formatElo, formatEloChange, formatRank } from '../../lib/teams.js';
 import { fmtDate, plural } from '../../lib/teamPage.js';
 import StarToggle from './StarToggle';
+import LeagueBadge from '../icons/LeagueBadge';
+import { StarIcon } from '../icons';
 import { FormDots } from './common';
 
 function Stat({ label, value, note }) {
@@ -19,7 +21,7 @@ function PrimaryControl({ name, favourites }) {
   if (favourites.primary === name) {
     return (
       <span className="tp-primary-tag">
-        <span aria-hidden="true">★ </span>Your primary team
+        <StarIcon filled size={14} />Your primary team
       </span>
     );
   }
@@ -50,7 +52,7 @@ function TeamHeader({ profile, favourites, onOpenPicker }) {
           <h2 className="team-name">{name}</h2>
           <div className="team-meta">
             <span className="league-badge">
-              {info ? <span aria-hidden="true">{info.emoji}</span> : null}
+              {info ? <LeagueBadge code={league} size="sm" /> : null}
               {info ? info.name : 'No domestic league on record'}
             </span>
             {lastMatch ? (

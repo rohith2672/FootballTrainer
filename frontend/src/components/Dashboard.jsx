@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import MatchCard from './MatchCard';
+import LeagueBadge from './icons/LeagueBadge';
+import { AlertIcon, GlobeIcon, InboxIcon, SearchIcon, StarIcon } from './icons';
 import { useUpcoming } from '../hooks/useUpcoming';
 import { useFavourites } from '../hooks/useFavourites';
+import { replaceHash } from '../hooks/useHashRoute';
 import { describeError } from '../api';
 import {
   ALL_LEAGUES,
@@ -23,6 +26,7 @@ import {
   myTeamsFixtures,
 } from '../lib/dashboard';
 import { shortTeamName, teamHref } from '../lib/teams';
+import { dashboardHash, parseDashboardFilters } from '../lib/routes.js';
 import '../styles/favourites.css';
 
 const SORT_OPTIONS = [
@@ -101,8 +105,9 @@ function MyTeamsSection({ teams, primary, fixtures, filtersActive, onOpenPicker,
     <section className="my-teams-section" aria-labelledby="my-teams-heading">
       <div className="my-teams-header">
         <div>
-          <h2 id="my-teams-heading">
-            <span aria-hidden="true">★ </span>My teams
+          <h2 id="my-teams-heading" className="with-icon">
+            <StarIcon filled size={20} className="star-icon" />
+            My teams
           </h2>
           {teams.length ? (
             <p className="my-teams-list">
@@ -128,7 +133,7 @@ function MyTeamsSection({ teams, primary, fixtures, filtersActive, onOpenPicker,
         <div className="my-teams-empty">
           <p>
             Follow teams to pin their fixtures here and filter the news. Tap the{' '}
-            <span aria-hidden="true">☆</span>
+            <StarIcon size={16} className="inline-icon" />
             <span className="sr-only">star</span> next to a team on any match card
             {onOpenPicker ? ', or choose from the full list.' : '.'}
           </p>
@@ -149,8 +154,8 @@ function MyTeamsSection({ teams, primary, fixtures, filtersActive, onOpenPicker,
       ) : (
         <>
           <div className="matches-grid">
-            {shown.map((m) => (
-              <MatchCard key={m.key} match={m} headingLevel={3} />
+            {shown.map((m, i) => (
+              <MatchCard key={m.key} match={m} headingLevel={3} index={i} />
             ))}
           </div>
           {more > 0 ? (
@@ -167,19 +172,33 @@ function MyTeamsSection({ teams, primary, fixtures, filtersActive, onOpenPicker,
 }
 
 /**
+ * Filters live in the hash query ("#/?league=PL&q=ars&mine=1&sort=confidence")
+ * so they survive a reload and can be shared. `routeHash` is the last Upcoming
+ * hash (App keeps it while another view is shown); changes replace the
+ * current history entry instead of adding one per keystroke.
+ *
  * `onOpenPicker` (optional): opens the team picker. Without it, "Choose teams"
  * buttons are hidden and the empty state points at the stars on match cards.
  */
-function Dashboard({ onOpenPicker }) {
+function Dashboard({ routeHash = '', onOpenPicker }) {
   const { matches: rawMatches, loading, error, updatedAt, reload } = useUpcoming();
   const { teams, primary } = useFavourites();
   const hasFavourites = teams.length > 0;
+  const selectorRef = useRef(null);
 
-  const [selectedLeague, setSelectedLeague] = useState(null);
-  const [query, setQuery] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [sort, setSort] = useState('kickoff');
+  const filters = useMemo(() => parseDashboardFilters(routeHash), [routeHash]);
+  const { q: query, from, to, sort } = filters;
+  const selectedLeague = filters.mine ? MY_TEAMS : filters.league;
+
+  // Read the live hash at call time so quick successive edits never use a stale copy.
+  const update = (patch) =>
+    replaceHash(dashboardHash({ ...parseDashboardFilters(window.location.hash), ...patch }));
+  const setSelectedLeague = (code) =>
+    update(code === MY_TEAMS ? { mine: true, league: null } : { mine: false, league: code });
+  const setQuery = (q) => update({ q });
+  const setFrom = (value) => update({ from: value });
+  const setTo = (value) => update({ to: value });
+  const setSort = (value) => update({ sort: value });
 
   const matches = useMemo(() => normalizeMatches(rawMatches), [rawMatches]);
   const leagueCodes = useMemo(() => leaguesPresent(matches), [matches]);
@@ -242,11 +261,18 @@ function Dashboard({ onOpenPicker }) {
   // `updatedAt` is when the fixtures were loaded: "next 7 days" counts from then.
   const stats = useMemo(() => dashboardStats(visible, teams, updatedAt), [visible, teams, updatedAt]);
 
-  const clearFilters = () => {
-    setQuery('');
-    setFrom('');
-    setTo('');
-  };
+  const clearFilters = () => update({ q: '', from: '', to: '' });
+
+  // Keep the active pill visible in the horizontally scrolling selector.
+  useEffect(() => {
+    const row = selectorRef.current;
+    const pill = row?.querySelector('[aria-pressed="true"]');
+    if (!row || !pill || row.scrollWidth <= row.clientWidth) return;
+    const left = pill.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft || left + pill.offsetWidth > row.scrollLeft + row.clientWidth) {
+      row.scrollLeft = Math.max(0, left - 16);
+    }
+  }, [activeLeague, leagueCodes.length]);
 
   // --- Initial load / hard failure -----------------------------------------
   if (!updatedAt && loading) {
@@ -262,7 +288,7 @@ function Dashboard({ onOpenPicker }) {
     const { title, message } = describeError(error);
     return (
       <div className="error-card" role="alert">
-        <div className="error-icon" aria-hidden="true">{'⚠️'}</div>
+        <div className="error-icon"><AlertIcon size={40} /></div>
         <h2>{title}</h2>
         <p>{message}</p>
         <button type="button" className="btn btn-primary" onClick={reload}>
@@ -308,7 +334,7 @@ function Dashboard({ onOpenPicker }) {
         {staleBanner}
         {refreshBar}
         <div className="empty-state">
-          <div className="empty-icon" aria-hidden="true">{'\u{1F4ED}'}</div>
+          <div className="empty-icon"><InboxIcon size={44} /></div>
           <h2>No fixtures scheduled</h2>
           <p>
             The service responded but returned no upcoming fixtures. That usually means none are
@@ -328,7 +354,7 @@ function Dashboard({ onOpenPicker }) {
     <div className="dashboard-container">
       {staleBanner}
 
-      <div className="league-selector" id="league-selector" role="group" aria-label="League">
+      <div className="league-selector" id="league-selector" role="group" aria-label="League" ref={selectorRef}>
         <button
           type="button"
           id="league-ALL"
@@ -337,7 +363,7 @@ function Dashboard({ onOpenPicker }) {
           aria-label={`All leagues, ${plural(filtered.length, 'fixture')}`}
           onClick={() => setSelectedLeague(ALL_LEAGUES)}
         >
-          <span className="league-emoji" aria-hidden="true">{'\u{1F30D}'}</span>
+          <span className="pill-icon"><GlobeIcon size={18} /></span>
           <span className="league-name">All leagues</span>
           <span className="match-count" aria-hidden="true">{filtered.length}</span>
         </button>
@@ -350,7 +376,7 @@ function Dashboard({ onOpenPicker }) {
             aria-label={`My teams, ${plural(favFiltered.length, 'fixture')}`}
             onClick={() => setSelectedLeague(MY_TEAMS)}
           >
-            <span className="league-emoji" aria-hidden="true">★</span>
+            <span className="pill-icon"><StarIcon filled size={18} /></span>
             <span className="league-name">My teams</span>
             <span className="match-count" aria-hidden="true">{favFiltered.length}</span>
           </button>
@@ -368,7 +394,7 @@ function Dashboard({ onOpenPicker }) {
               aria-label={`${info.name}, ${plural(count, 'fixture')}`}
               onClick={() => setSelectedLeague(code)}
             >
-              <span className="league-emoji" aria-hidden="true">{info.emoji}</span>
+              <LeagueBadge code={code} size="sm" />
               <span className="league-name">{info.name}</span>
               <span className="match-count" aria-hidden="true">{count}</span>
             </button>
@@ -440,7 +466,7 @@ function Dashboard({ onOpenPicker }) {
             return (
               <section key={code} className="league-section" aria-labelledby={headingId}>
                 <div className="league-header">
-                  <span className="league-header-icon" aria-hidden="true">{info.emoji}</span>
+                  <LeagueBadge code={code} size="lg" className="league-header-icon" />
                   <div className="league-header-info">
                     <h2 id={headingId}>{info.name}</h2>
                     <span>
@@ -455,16 +481,16 @@ function Dashboard({ onOpenPicker }) {
                     <div className="date-group" key={group.dateKey}>
                       <h3 className="date-heading">{formatDateHeading(group.dateKey)}</h3>
                       <div className="matches-grid">
-                        {group.matches.map((m) => (
-                          <MatchCard key={m.key} match={m} headingLevel={4} id={matchElementId(m.key)} />
+                        {group.matches.map((m, i) => (
+                          <MatchCard key={m.key} match={m} headingLevel={4} id={matchElementId(m.key)} index={i} />
                         ))}
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="matches-grid">
-                    {items.map((m) => (
-                      <MatchCard key={m.key} match={m} headingLevel={3} id={matchElementId(m.key)} />
+                    {items.map((m, i) => (
+                      <MatchCard key={m.key} match={m} headingLevel={3} id={matchElementId(m.key)} index={i} />
                     ))}
                   </div>
                 )}
@@ -474,7 +500,7 @@ function Dashboard({ onOpenPicker }) {
         </div>
       ) : myTeamsMode ? (
         <div className="empty-state">
-          <div className="empty-icon" aria-hidden="true">★</div>
+          <div className="empty-icon"><StarIcon size={44} /></div>
           <h2>No fixtures for your teams</h2>
           <p>
             {filtersActive
@@ -487,7 +513,7 @@ function Dashboard({ onOpenPicker }) {
         </div>
       ) : (
         <div className="empty-state">
-          <div className="empty-icon" aria-hidden="true">{'\u{1F50D}'}</div>
+          <div className="empty-icon"><SearchIcon size={44} /></div>
           <h2>No fixtures match</h2>
           <p>
             {filtersActive
