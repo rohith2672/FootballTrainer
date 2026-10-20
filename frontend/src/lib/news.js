@@ -1,3 +1,5 @@
+import { NEWS_AMBIGUOUS, TEAM_ALIASES, stripTeamAffixes, teamAliases } from './teams.js';
+
 /** News responses are cached server-side; client refresh never contacts publishers. */
 export const NEWS_POLL_MS = 5 * 60 * 1000;
 export const NEWS_STALE_MS = 90 * 60 * 1000;
@@ -98,4 +100,124 @@ export function subscribeNewsPolling(load, page = document, clock = globalThis) 
     clock.clearInterval(timer);
     page.removeEventListener('visibilitychange', refreshVisible);
   };
+}
+
+// ---- Team mentions in headlines ----------------------------------------------
+//
+// A headline mentions a team when it contains one of the team's keys: its
+// canonical name, the name without "FC"-style affixes ("SSC Napoli" ->
+// "Napoli") or a known alias ("Man Utd"). Guards against false positives:
+// - keys that are ambiguous on their own ("Manchester", "United", "City",
+//   "Milan", "Madrid", "Paris", "Inter", "Nice") are never used;
+// - matching is on whole words (Unicode-aware), so "Villarreal" is not "Villa";
+// - capitalised key words must be capitalised in the headline, so the verb in
+//   "Saka spurs Arsenal on" is not Tottenham;
+// - a match inside a longer match of another club is ignored, so
+//   "Espanyol de Barcelona" is not FC Barcelona.
+
+/** Accent-free, punctuation-light text that keeps letter case. */
+function foldHeadline(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[‘’`´]/g, "'")
+    .replace(/\./g, '')
+    .replace(/[-‐-―]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const isUpper = (ch) => !!ch && ch !== ch.toLowerCase() && ch === ch.toUpperCase();
+
+const keyCache = new Map();
+
+/** Folded, unambiguous key strings for one canonical team name (cached). */
+function teamKeys(name) {
+  if (keyCache.has(name)) return keyCache.get(name);
+  const keys = new Set();
+  for (const raw of [name, stripTeamAffixes(name), ...teamAliases(name)]) {
+    const key = foldHeadline(raw);
+    if (key.length < 3 || NEWS_AMBIGUOUS.has(key.toLowerCase())) continue;
+    keys.add(key);
+  }
+  const entry = { keys: [...keys], lower: [...keys].map((k) => k.toLowerCase()), matchers: null };
+  keyCache.set(name, entry);
+  return entry;
+}
+
+/** Compiled matchers for one team, built on first use. */
+function teamMatchers(name) {
+  const entry = teamKeys(name);
+  entry.matchers ??= entry.keys.map((key) => ({
+    words: key.split(' '),
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])${key.split(' ').map(escapeRegExp).join('\\s+')}(?![\\p{L}\\p{N}])`,
+      'giu',
+    ),
+  }));
+  return entry.matchers;
+}
+
+/** [{start, end}] spans where `name` is mentioned in an already folded title. */
+function findMentions(folded, name) {
+  const spans = [];
+  for (const { words, regex } of teamMatchers(name)) {
+    regex.lastIndex = 0;
+    for (const m of folded.matchAll(regex)) {
+      const found = m[0].split(/\s+/);
+      const casingOk = words.every((word, i) => !isUpper(word[0]) || isUpper(found[i]?.[0]));
+      if (casingOk) spans.push({ start: m.index, end: m.index + m[0].length });
+    }
+  }
+  return spans;
+}
+
+const articleTitle = (article) => (typeof article === 'string' ? article : article?.title);
+
+/** The subset of `teams` (canonical names, in their given order) a headline mentions. */
+export function mentionedTeams(article, teams) {
+  const title = articleTitle(article);
+  const list = [...new Set(Array.isArray(teams) || teams instanceof Set ? teams : [])].filter(
+    (t) => typeof t === 'string' && t.trim(),
+  );
+  if (typeof title !== 'string' || !title.trim() || !list.length) return [];
+  const folded = foldHeadline(title);
+
+  const candidates = list
+    .map((name) => ({ name, spans: findMentions(folded, name) }))
+    .filter((c) => c.spans.length);
+  if (!candidates.length) return [];
+
+  // A span is shadowed by a longer mention of another known club containing
+  // it ("Barcelona" inside "Espanyol de Barcelona"). Only clubs with a longer
+  // key that contains the span's text can do that, so only those are scanned.
+  const others = [...new Set([...Object.keys(TEAM_ALIASES), ...list])];
+  const shadowed = (name, span) => {
+    const text = folded.slice(span.start, span.end).toLowerCase().replace(/\s+/g, ' ');
+    const length = span.end - span.start;
+    return others.some(
+      (other) =>
+        other !== name &&
+        teamKeys(other).lower.some((key) => key.length > text.length && key.includes(text)) &&
+        findMentions(folded, other).some(
+          (o) => o.start <= span.start && o.end >= span.end && o.end - o.start > length,
+        ),
+    );
+  };
+
+  return candidates
+    .filter((c) => c.spans.some((span) => !shadowed(c.name, span)))
+    .map((c) => c.name);
+}
+
+/** True when the article's headline mentions at least one of `teams`. */
+export function matchesTeams(article, teams) {
+  return mentionedTeams(article, teams).length > 0;
+}
+
+/** Articles whose headline mentions any of `teams` (order preserved). */
+export function filterNewsForTeams(articles, teams) {
+  if (!Array.isArray(articles)) return [];
+  return articles.filter((article) => matchesTeams(article, teams));
 }

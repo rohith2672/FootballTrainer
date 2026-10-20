@@ -1,10 +1,8 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { ROUTES, legacyView, parseRoute } from '../lib/routes.js';
 
-export const ROUTES = {
-  upcoming: '#/',
-  trackRecord: '#/track-record',
-  news: '#/news',
-};
+export { ROUTES };
+export { teamHref } from '../lib/teams.js';
 
 function subscribe(callback) {
   window.addEventListener('hashchange', callback);
@@ -14,9 +12,24 @@ function subscribe(callback) {
 const getSnapshot = () => window.location.hash;
 const getServerSnapshot = () => '';
 
-/** Current view derived from location.hash; anything unknown is "upcoming". */
+const useHash = () => useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+/**
+ * Current top-level view key derived from location.hash ('upcoming' |
+ * 'trackRecord' | 'news'); anything unknown is "upcoming". Team routes
+ * ("#/team/<name>") also map to 'upcoming' here so existing callers that index
+ * a ROUTES-keyed table keep working — use `useRoute()` to see team routes.
+ */
 export function useHashRoute() {
-  const hash = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const normalized = hash.replace(/\/+$/, '');
-  return Object.keys(ROUTES).find((key) => ROUTES[key] === normalized) ?? 'upcoming';
+  return legacyView(useHash());
+}
+
+/**
+ * Full route: `{ view, team }` where view is 'upcoming' | 'trackRecord' |
+ * 'news' | 'team', and `team` is the decoded canonical name for team routes
+ * (null otherwise). Malformed team hashes fall back to 'upcoming'.
+ */
+export function useRoute() {
+  const hash = useHash();
+  return useMemo(() => parseRoute(hash), [hash]);
 }

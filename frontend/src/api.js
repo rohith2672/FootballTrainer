@@ -14,11 +14,22 @@ export const API_BASE = String(import.meta.env?.VITE_API_URL ?? DEFAULT_BASE).re
  * (other 5xx) or 'parse' (unexpected response body).
  */
 export class ApiError extends Error {
-  constructor(kind, message, status = null) {
+  /** `detail`: the server's `{"detail": "..."}` string for non-2xx responses, if any. */
+  constructor(kind, message, status = null, detail = null) {
     super(message);
     this.name = 'ApiError';
     this.kind = kind;
     this.status = status;
+    this.detail = detail;
+  }
+}
+
+async function readDetail(response) {
+  try {
+    const body = await response.json();
+    return typeof body?.detail === 'string' && body.detail.trim() ? body.detail.trim() : null;
+  } catch {
+    return null;
   }
 }
 
@@ -46,13 +57,14 @@ async function getJson(path, { signal, params } = {}) {
 
   if (!response.ok) {
     const { status } = response;
+    const detail = await readDetail(response);
     if ([502, 503, 504].includes(status)) {
-      throw new ApiError('upstream', `Service unavailable (HTTP ${status}).`, status);
+      throw new ApiError('upstream', `Service unavailable (HTTP ${status}).`, status, detail);
     }
     if (status >= 500) {
-      throw new ApiError('server', `The prediction service failed (HTTP ${status}).`, status);
+      throw new ApiError('server', `The prediction service failed (HTTP ${status}).`, status, detail);
     }
-    throw new ApiError('client', `The request was rejected (HTTP ${status}).`, status);
+    throw new ApiError('client', `The request was rejected (HTTP ${status}).`, status, detail);
   }
 
   try {
@@ -62,13 +74,97 @@ async function getJson(path, { signal, params } = {}) {
   }
 }
 
-/** Fetch the upcoming fixtures. Resolves to an array (possibly empty). */
-export async function fetchUpcoming({ signal } = {}) {
-  const data = await getJson('/upcoming', { signal });
-  if (!Array.isArray(data)) {
-    throw new ApiError('parse', 'The prediction service returned an unexpected response.');
-  }
+const unexpected = () => new ApiError('parse', 'The prediction service returned an unexpected response.');
+const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Fetch the upcoming fixtures. Resolves to an array (possibly empty).
+ * `team` (optional, canonical name) keeps only fixtures involving that team.
+ */
+export async function fetchUpcoming({ signal, team } = {}) {
+  const data = await getJson('/upcoming', { signal, params: { team } });
+  if (!Array.isArray(data)) throw unexpected();
   return data;
+}
+
+/** Path segment for a team name; names contain spaces, "&", "." and accents. */
+function teamPath(name, suffix = '') {
+  const team = typeof name === 'string' ? name.trim() : '';
+  if (!team) throw new ApiError('client', 'A team name is required.');
+  return `/teams/${encodeURIComponent(team)}${suffix}`;
+}
+
+/** GET /teams/index → [{name, league|null}] sorted by league then name. */
+export async function getTeamsIndex({ signal } = {}) {
+  const data = await getJson('/teams/index', { signal });
+  if (!Array.isArray(data)) throw unexpected();
+  return data.filter((t) => isObject(t) && typeof t.name === 'string' && t.name);
+}
+
+/** GET /teams/{name}?as_of= → team profile object (404 → ApiError client/404). */
+export async function getTeam(name, { asOf, signal } = {}) {
+  const data = await getJson(teamPath(name), { signal, params: { as_of: asOf } });
+  if (!isObject(data) || typeof data.name !== 'string') throw unexpected();
+  return data;
+}
+
+/** GET /teams/{name}/matches?limit=&venue= → match rows, newest first. */
+export async function getTeamMatches(name, { limit, venue, signal } = {}) {
+  const data = await getJson(teamPath(name, '/matches'), {
+    signal,
+    params: { limit, venue: venue && venue !== 'all' ? venue : undefined },
+  });
+  if (!Array.isArray(data)) throw unexpected();
+  return data;
+}
+
+/** GET /teams/{name}/elo-history?since= → {team, points: [...]}, ascending by date. */
+export async function getEloHistory(name, { since, signal } = {}) {
+  const data = await getJson(teamPath(name, '/elo-history'), { signal, params: { since } });
+  if (!isObject(data) || !Array.isArray(data.points)) throw unexpected();
+  return data;
+}
+
+/** GET /h2h?a=&b=&limit= → head-to-head totals and the newest meetings. */
+export async function getH2H(a, b, { limit, signal } = {}) {
+  const teamA = typeof a === 'string' ? a.trim() : '';
+  const teamB = typeof b === 'string' ? b.trim() : '';
+  if (!teamA || !teamB) throw new ApiError('client', 'Two team names are required.');
+  const data = await getJson('/h2h', { signal, params: { a: teamA, b: teamB, limit } });
+  if (!isObject(data) || !Array.isArray(data.meetings)) throw unexpected();
+  return data;
+}
+
+/** True for a 404 whose detail says the team is unknown (vs. a missing endpoint). */
+export function isTeamNotFound(err) {
+  return err?.kind === 'client' && err.status === 404 && /^Team not found/i.test(err.detail ?? '');
+}
+
+/** Error copy for team pages. */
+export function describeTeamError(err) {
+  if (isTeamNotFound(err)) {
+    return {
+      title: 'Team not found',
+      message: `${err.detail}. Check the name or pick a team from the list.`,
+    };
+  }
+  if (err?.kind === 'client' && err.status === 404) {
+    return {
+      title: 'Team analysis isn’t available yet',
+      message:
+        'The service does not expose the team endpoints. The backend may not have been updated yet — try again after the next deploy.',
+    };
+  }
+  if (err?.kind === 'client' && err.status === 422 && err.detail) {
+    return { title: 'Request rejected', message: err.detail };
+  }
+  if (err?.kind === 'upstream') {
+    return {
+      title: 'Team data temporarily unavailable',
+      message: `${err.message} This is usually temporary — try again in a minute.`,
+    };
+  }
+  return describeError(err);
 }
 
 /** Read the server's news cache; this never initiates publisher ingestion. */
@@ -81,9 +177,12 @@ export async function fetchNews({ signal } = {}) {
   }
 }
 
-/** Fetch the live track record. Resolves to the raw response object. */
-export async function fetchTrackRecord({ league, weeks, signal } = {}) {
-  const data = await getJson('/track-record', { signal, params: { league, weeks } });
+/**
+ * Fetch the live track record. Resolves to the raw response object.
+ * `team` (optional) restricts it to stored predictions involving that team.
+ */
+export async function fetchTrackRecord({ league, weeks, team, signal } = {}) {
+  const data = await getJson('/track-record', { signal, params: { league, weeks, team } });
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new ApiError('parse', 'The prediction service returned an unexpected response.');
   }
