@@ -1,8 +1,91 @@
 # FootballTrainer session handoff
 
-Last updated: 2026-10-20.
+Last updated: 2026-10-20 (evening).
 
-## Current handoff: bookmaker comparison removed (2026-10-20)
+## Current handoff: team analysis, favourites, UI polish and model v2 (2026-10-20)
+
+Branch `codex`, commits `53afd06..7d55279` plus this docs commit (see
+`git log --oneline 888dc66..HEAD`). Nothing pushed. Plan:
+`C:/Users/rohit/.claude/plans/go-through-the-relevant-recursive-iverson.md`
+(team analysis + favourites -> UI polish -> model accuracy; all three done).
+Preserve the untracked `TEST_REPORT_2026-10-15.md`.
+
+### What was built
+
+- **News** (`53afd06`) and **bookmaker removal** (`10ae2de`): see the two
+  sections below. Yardsticks are Elo, class prior and uniform; odds are never a
+  model input.
+- **Team analysis API** (`ca4c2a9` contract, `09bebc5` + `eafaab5`;
+  `src/api/teams.py`, `team_stats.py`, `history_cache.py`): `/teams/index`,
+  `/teams/{name}` (Elo, season-robust league rank, form, season home/away split,
+  last-10 averages, uncapped rest days, cached `next_fixture`),
+  `/teams/{name}/matches`, `/teams/{name}/elo-history` (replay of `elo.py`,
+  parity-tested against the engine), `/h2h`, and a `team` filter on `/upcoming`
+  and `/track-record`. History cached 300 s (with `HistoryIndex`); next-fixture
+  results cached 120 s (30 s when the source is unavailable).
+- **Frontend** (`06f682c`, `7815106`, `e4401d2`, `be7508b`, `713fe40`, `5b6fb1c`,
+  `937275d`, `0d6cd24`, `27ce6b7`): favourites store (localStorage
+  `ft.favourites.v1`, several teams + a primary) used on dashboard, cards and
+  news; team page `#/team/<name>` with picker and reusable SVG `LineChart`;
+  URL-hash dashboard filters; SVG icons and league badges; light/dark/system
+  theme (`ft.theme.v1`); compact shell with mobile bottom tab bar; design
+  tokens, AA contrast, aligned breakpoints; review and real-data fixes.
+- **Model v2** (`4199a25`, `429e22d`, merged in `7d55279`): tuned adaptive Elo
+  (K=14, season regression 0.05, per-league online home advantage), online
+  Poisson/Dixon-Coles goals model features (7 `pois_*` columns),
+  `FEATURE_COLS` 37 -> 25 (`ENGINE_COLS` still computes all 44), XGBoost
+  selected after 100 Optuna trials (`--n-trials 100`; code default is 50).
+  Holdout 2025-08-15..2026-10-12 (2,049 rows): log-loss 0.99424 -> 0.98835,
+  accuracy 0.5188 -> 0.5212, Brier 0.5925 -> 0.5886. Walk-forward 0.98907 ->
+  0.98292 (all 8 folds better). Holdout baselines in the new registry: Elo
+  0.9932, Poisson 0.9916, class prior 1.0712, uniform 1.0986 (Poisson's
+  walk-forward 0.9815 beats the model but is partly in-sample, because its
+  constants were tuned on those folds). Per-league holdout: BL1 .9725 -> .9623,
+  FL1 .9942 -> .9944, PD .9828 -> .9685, PL 1.0356 -> 1.0356, SA .9821 -> .9776.
+  Rejected: draw features, HT/corners/fouls/cards (migration 0005 never
+  written), EWMA form, congestion, league one-hots. The model still never
+  argmax-predicts a draw. Elo values shown in the UI shifted (Arsenal
+  1680.3 -> 1746.2). Details: `docs/model_experiments_2026-10-20.md`.
+- Artifacts (gitignored) are installed in `src/model/artifacts`; the committed
+  `model_registry.json` matches them and no longer has `bookmaker*` keys.
+  `data/processed/features.csv` rebuilt (18,234 rows).
+
+### Verification actually run
+
+- pytest at the tip: 437 passed, 23 skipped (no PG). With a disposable
+  PostgreSQL 18 cluster at `937275d`: 432 passed, 0 skipped; migrations
+  0001 -> 0004; ingest of 20,060 rows, idempotent on re-run.
+- Real API + Vite browser checks at 375 and 1100 px, light and dark, on real
+  data (before the model merge).
+- Frontend: 109 Node tests, lint and build clean.
+- Serving smoke with the new model: Arsenal v Chelsea 0.618/0.241/0.140.
+
+### Not verified
+
+- `next_fixture` / match prep against a real fixture (no
+  `FOOTBALL_DATA_API_KEY`); live track record with settled predictions; a real
+  news-worker run this session; CL history (not in co.uk data, so CL sides only
+  get the shared Elo); Docker/nginx rebuild; screen reader; touch gestures on
+  charts. The UI was not re-checked in a browser after the model merge.
+
+### Known issues and follow-ups
+
+- `docs/api_contract.md` "Team analysis" still describes the old Elo (K=20,
+  25 % season regression, fixed home advantage 60). Code is K=14, 0.05,
+  per-league online home advantage. Update the contract.
+- Team picker cannot tag relegated teams; needs a backend `current` flag in
+  `/teams/index`. Relegated sides may keep a rank early in a season until
+  promoted sides have played.
+- Draws are never the argmax; PL holdout did not improve (1.0356).
+- Model-v2 scratch material is in the session temp scratchpad and is **not
+  durable**: `.../scratchpad/backup_pre_model_merge/` (previous artifacts and
+  features.csv), `.../scratchpad/phase3/experimental_full.patch` (HT/corners/
+  fouls/cards capture, if ever wanted) and `.../scratchpad/phase3/settings_local.patch`
+  (a local `.claude/settings.local.json` edit set aside from the model
+  worktree; the user should review it). Full prefix:
+  `C:/Users/rohit/AppData/Local/Temp/claude/C--Users-rohit-OneDrive-Desktop-projects-FootballTrainer/da08ef47-dca2-4645-bc26-70753728fcf8/scratchpad/`.
+
+## Previous handoff: bookmaker comparison removed (2026-10-20)
 
 - Branch `codex`. News work committed as `53afd06` (`feat(news): ...`); this
   change is the follow-up commit `refactor: remove bookmaker comparison from
@@ -23,6 +106,7 @@ Last updated: 2026-10-20.
   columns are kept but unused. Odds must never become a model input.
 - The committed `model_registry.json` still has legacy `bookmaker*` baseline
   keys (no retrain done); `track_record.backtest_block` filters them at read time.
+  *(Superseded: the model-v2 registry has no bookmaker keys; the filter is now a no-op.)*
 - This is the start of the plan at
   `C:/Users/rohit/.claude/plans/go-through-the-relevant-recursive-iverson.md`:
   team analysis + favourite teams -> UI polish -> model accuracy.
@@ -64,11 +148,16 @@ Last updated: 2026-10-20.
   Docker images/full stack not run (Docker daemon not active; `.env` missing).
   Configure `.env` then use the README startup command for continuous operation.
 - Prediction improvements remain separately evaluated follow-ups: PL slice metrics
-  and matched-row bookmaker comparisons, PL-specialist experiment, richer form /
+  and matched-row bookmaker comparisons (retired 2026-10-20), PL-specialist experiment, richer form /
   shot freshness, football parameter tuning, and a match preparation page.
   This news task makes no claim of improved prediction accuracy.
 
 ## Previous handoff (2026-10-15; historical context)
+
+> Superseded on 2026-10-20: 37 features -> 25, LightGBM -> XGBoost as the served
+> model, the bookmaker decision gate and baselines retired, and Postgres has
+> since been exercised (disposable PG 18 at `937275d`). Numbers below are as of
+> 2026-10-15.
 
 Local `dev` had tickets 018-022 committed (5 commits on
 top of `6172844`; not pushed). Recheck Git and source on resume.
@@ -83,7 +172,7 @@ top of `6172844`; not pushed). Recheck Git and source on resume.
   per ticket (018-022). User accepted the +0.018 gap for now (odds stay benchmark-only).
 - `TEST_REPORT_2026-10-15.md` is an untracked output of a scheduled offline test run
   (not part of these tickets); review or delete it yourself.
-- **Decision gate (open, user's call):** real-data holdout (2025-08-15..2026-10-12,
+- **Decision gate (retired 2026-10-20, bookmaker comparison removed):** real-data holdout (2025-08-15..2026-10-12,
   2049 matches) gives selected LightGBM log-loss 0.9942 vs bookmaker (Pinnacle
   closing, proportional) 0.9764 on the same rows: gap +0.018 (target 0.01).
   Options: add odds as a feature (needs a live odds source at serve time) or
@@ -107,7 +196,7 @@ top of `6172844`; not pushed). Recheck Git and source on resume.
   match_day, provider_id, source, natural key).
 - TICKET-020 features (`src/features/engine.py`, `elo.py`, `columns.py`):
   single point-in-time engine `compute_features(matches)` used by training AND
-  serving; 37 `FEATURE_COLS` (Elo, form, venue form, shots, shrunk H2H, venue win
+  serving; 37 `FEATURE_COLS` (now 25, see current handoff) (Elo, form, venue form, shots, shrunk H2H, venue win
   rates, rest, league one-hots, season_progress). `build_dataset --from-csv
   data/raw/couk` builds without a DB.
 - TICKET-021 API (`src/api/main.py`, `serving.py`, `model_store.py`, `store.py`,
@@ -125,7 +214,7 @@ top of `6172844`; not pushed). Recheck Git and source on resume.
   20,060 matches (gitignored). `data/processed/features.csv` 18,234 rows after
   burn-in; `train_log.txt`, `eval_report.txt`, `shap_summary.png`,
   `mlflow_local.db` there. Tracked `mlflow.db` untouched.
-- `src/model/artifacts/best_model.pkl` = LightGBM (loads in a fresh interpreter);
+- `src/model/artifacts/best_model.pkl` = LightGBM (now XGBoost, model v2) (loads in a fresh interpreter);
   registry updated. Top features: elo_diff, elo_expected_home, home_elo, h2h.
 - Python 3.11 venv at `.venv` (requirements + tzdata). Frontend node_modules installed.
 
@@ -139,7 +228,7 @@ top of `6172844`; not pushed). Recheck Git and source on resume.
 
 ## Not verified / known gaps
 
-- Postgres never ran: migrations 0002/0003 (only rendered offline), 18 DB tests
+- Postgres never ran (since run at `937275d`, 2026-10-20): migrations 0002/0003 (only rendered offline), 18 DB tests
   (need `TEST_DATABASE_URL`), upsert/settlement SQL, `load_history`.
 - No live football-data.org call: status `SCHEDULED,TIMED`, `regularTime` field,
   canonical team names (`# ?` in team_names.py), CL linking all unverified.

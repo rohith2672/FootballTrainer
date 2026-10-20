@@ -1,314 +1,336 @@
 # Football Match Outcome Predictor
 
-## Hourly football news (2026-10-16)
+An end-to-end ML pipeline that predicts football match outcomes (Home Win / Draw /
+Away Win) for the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 and the
+Champions League. It ingests historical results, builds point-in-time features,
+trains a walk-forward-validated model and serves predictions, team analysis and
+football news through FastAPI to a React dashboard.
 
-The **News** dashboard tab shows BBC Sport football headline links, publication
-times, and server refresh status. The worker checks the feed every hour even
-when the browser is closed. The page reads cached headlines every five minutes
-while visible; its Refresh button also reads the cache. New stories depend on
-publisher activity. The computer/server and worker must remain running.
+## Highlights
 
-If `.env` is missing, copy `.env.example` to `.env` and configure your database
-settings privately. With `.env` configured, run:
+- **Data:** about ten seasons of football-data.co.uk history for the five
+  domestic leagues (results, shots, kick-off times), plus current-season
+  fixtures and results from football-data.org. All writes are idempotent upserts.
+- **Features:** one point-in-time engine (`src/features/engine.py`) shared by
+  training and serving, so the API sees exactly the features the model was
+  trained on. Only data from before each match is used.
+- **Model:** XGBoost on 25 features, selected by season walk-forward
+  cross-validation and scored once on an untouched holdout (see
+  [Model](#model)).
+- **API:** predictions with top contributing factors, a stored-prediction track
+  record, team profiles, Elo history, head-to-head and cached news headlines.
+- **Dashboard:** upcoming fixtures by league, team pages, favourite teams,
+  track record, news, light/dark/system theme and a mobile bottom tab bar.
 
-```sh
-docker compose up --build -d db app news-worker frontend
-```
-
-The app applies migrations, including the additive `0004` news tables. The news
-worker retries while the database schema starts up. No news API key is needed;
-the football-data.org key and trained model are needed for predictions, not news.
-For local development with PostgreSQL and the project environment active:
-
-```sh
-python -m pip install -r requirements.txt
-python -m alembic upgrade head
-python -m src.news.worker
-```
-
-Run `python -m uvicorn src.api.main:app --reload` and the frontend in separate
-terminals. `GET /news?limit=50` returns cached headline metadata and source check
-times. News is marked delayed after 90 minutes without a successful check;
-cached headlines expire after 24 hours. An empty successful feed is distinguished
-from an unavailable source. Browser refresh times are not source freshness.
-
-This personal-use feature links to the publisher; it stores no article bodies
-and supplies no news-derived ML features. The current implementation uses the
-[BBC football RSS feed](https://feeds.bbci.co.uk/sport/football/rss.xml), following
-[BBC RSS guidance](https://www.bbc.co.uk/sport/articles/cqllxj2n4kyo).
-
-For tests, use `TEST_DATABASE_URL` pointing to a disposable PostgreSQL database.
-Database tests create isolated schemas and never use the application database.
-Both ordinary `postgresql://` URLs and explicit `postgresql+psycopg2://` URLs
-select the installed psycopg2 driver for application and migration connections.
-
-The sections below include historical setup/model descriptions. See `MEMORY.md`
-and `docs/api_contract.md` for the current model and API context.
-
-An end-to-end ML pipeline that predicts Premier League match outcomes (Home Win / Draw / Away Win) using historical match data, feature engineering, and an XGBoost classifier served via FastAPI.
+Betting odds are parsed and stored, but by design they are never a model input
+or an evaluation baseline. The yardsticks are Elo, the class prior and a uniform
+guess.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Data Pipeline                            │
-│                                                                 │
-│  football-data.org API                                          │
-│         │                                                       │
-│         ▼                                                       │
-│  src/ingestion/api_client.py  ──►  src/ingestion/ingest.py      │
-│         │                               │                       │
-│         │                               ▼                       │
-│         │                        PostgreSQL DB                  │
-│         │                               │                       │
-│         │              ┌────────────────┤                       │
-│         │              ▼                ▼                       │
-│         │       src/features/     src/features/                 │
-│         │          form.py           h2h.py                     │
-│         │              │                │                       │
-│         │              └───────┬────────┘                       │
-│         │                      ▼                                │
-│         │         src/features/build_dataset.py                 │
-│         │                      │                                │
-│         │                      ▼                                │
-│         │              data/processed/features.csv              │
-│         │                      │                                │
-└─────────┼──────────────────────┼─────────────────────────────┘
-          │                      │
-┌─────────┼──────────────────────▼─────────────────────────────┐
-│         │              Modelling Pipeline                      │
-│         │                                                      │
-│         │       src/model/train.py                            │
-│         │       ├── LogisticRegression (baseline)             │
-│         │       └── XGBoost + Optuna (50 trials)              │
-│         │               │                                     │
-│         │               ├──► MLflow Tracking (port 5000)      │
-│         │               └──► src/model/artifacts/xgb_best.pkl │
-│         │                         │                           │
-│         │       src/model/evaluate.py                         │
-│         │       ├── SHAP summary plot                         │
-│         │       └── eval_report.txt                           │
-│         │                                                      │
-└─────────┼──────────────────────────────────────────────────────┘
-          │
-┌─────────▼──────────────────────────────────────────────────────┐
-│                      API Layer                                  │
-│                                                                 │
-│         src/api/main.py  (FastAPI, port 8000)                  │
-│         ├── POST /predict                                       │
-│         ├── GET  /upcoming                                      │
-│         ├── GET  /health                                        │
-│         └── GET  /teams                                         │
-│                                                                 │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-┌─────────────────────────▼──────────────────────────────────────┐
-│                    Frontend UI (Port 3000)                     │
-│                                                                │
-│        React / Vite application with premium styling          │
-│        Displays upcoming match predictions dynamically         │
-└─────────────────────────────────────────────────────────────────┘
+football-data.co.uk CSVs ──┐
+                           ├─► src/ingestion (ingest, refresh, upsert) ─► PostgreSQL
+football-data.org API ─────┘                                                │
+                                                                            ▼
+                 src/features/engine.py (Elo, Poisson goals model, form, shots, H2H, rest)
+                                    │                                   │
+                                    ▼                                   │
+        src/features/build_dataset.py ─► data/processed/features.csv    │
+                                    │                                   │
+                                    ▼                                   │
+     src/model/train.py (LR, XGBoost, LightGBM, calibrated, ensemble;   │
+     walk-forward CV + holdout; MLflow) ─► src/model/artifacts/         │
+                                           best_model.pkl               │
+                                           model_registry.json          │
+                                    │                                   │
+                                    ▼                                   ▼
+               src/api (FastAPI, port 8000): predictions, track record, teams, h2h, news
+                                    │                       ▲
+                                    ▼                       │
+               frontend (React + Vite, nginx on port 3000)  src/news/worker.py (hourly BBC RSS)
 ```
 
 ## Prerequisites
 
 - Python 3.11
-- Docker and Docker Compose
-- PostgreSQL 15 (only needed for local runs without Docker)
-- A free API key from [football-data.org](https://www.football-data.org/)
+- Node.js (for the frontend) and npm
+- Docker and Docker Compose (for the full stack)
+- PostgreSQL 15+ (only for local runs without Docker)
+- A free [football-data.org](https://www.football-data.org/) API key for
+  upcoming fixtures and current-season results. History, training, team
+  analysis and news work without it.
 
 ## Setup
 
-### 1. Clone the repository
-
-```bash
-git clone <repo-url>
-cd FootballTrainer
-```
-
-### 2. Configure environment variables
+### 1. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your values:
+Edit `.env`:
 
 ```
-DATABASE_URL=postgresql://user:password@localhost:5432/football_predictor
+DATABASE_URL=postgresql://user:password@localhost:5433/football_predictor
 FOOTBALL_DATA_API_KEY=your_api_key_here
 MLFLOW_TRACKING_URI=http://localhost:5000
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
-### 3. Start all services with Docker
+Optional: `BEST_MODEL_PATH` and `REGISTRY_PATH` override where the API loads the
+model and its registry. Never commit `.env`.
+
+### 2. Start the stack with Docker
 
 ```bash
-docker-compose up --build
+docker compose up --build -d
 ```
 
-This starts four services:
+| Service | Host port | Description |
+|---------|-----------|-------------|
+| `frontend` | 3000 | React dashboard served by nginx (proxies `/api` to the app) |
+| `app` | 8000 | FastAPI server; runs `alembic upgrade head` on start |
+| `db` | 5433 | PostgreSQL 15 (container port 5432) |
+| `mlflow` | 5000 | MLflow tracking UI |
+| `news-worker` | – | Hourly BBC Sport RSS headline refresh |
 
-| Service | Port | Description |
-|---------|------|-------------|
-| `frontend`| 3000 | React Vite UI Dashboard |
-| `app`   | 8000 | FastAPI prediction server |
-| `db`    | 5432 | PostgreSQL 15 database |
-| `mlflow`| 5000 | MLflow tracking UI |
-
-The `app` container automatically runs Alembic migrations and starts the API server on startup.
-
-Verify everything is running:
+The `app` container mounts `./data` and `./src/model/artifacts`, so train a model
+(below) before expecting predictions. Check it with:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Expected response:
-
 ```json
-{"status": "ok", "model": "xgb_best", "version": "1.0.0"}
+{"status": "ok", "model_loaded": true, "db": "ok", "model": "xgboost",
+ "model_version": "...", "trained_at": "2026-10-20 16:12:08", "version": "2.0.0"}
 ```
 
-## Running Each Stage Manually
+`status` is `degraded` when the database is unreachable, and the endpoint returns
+`503` with `"status": "unavailable"` when no model is loaded.
 
-For local development outside Docker, activate the virtual environment first:
+## Running each stage manually
+
+Create and activate a virtual environment, then install dependencies:
 
 ```bash
+python -m venv .venv
+
 # Windows
-venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # macOS / Linux
-source venv/bin/activate
-```
+source .venv/bin/activate
 
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
-```
-
-Run Alembic migrations:
-
-```bash
 alembic upgrade head
 ```
 
 ### 1. Ingest match data
 
-Pulls 3 seasons (2021–2023) of Premier League matches from the API and stores them in PostgreSQL. Safe to re-run — duplicates are skipped.
-
 ```bash
+# football-data.co.uk history (5 domestic leagues, 10 completed seasons + current); no API key needed
+python -m src.ingestion.ingest --source couk
+
+# Everything: co.uk history plus football-data.org current season (CL also gets the previous season)
 python -m src.ingestion.ingest
 ```
 
-### 2. Build the feature dataset
+Other flags: `--leagues PL PD ...`, `--seasons 2023 2024` (season start years),
+`--raw-dir`, `--no-download` (use CSVs already in `data/raw/couk`) and
+`--force-download`. Re-running is safe.
 
-Computes rolling form, head-to-head, and home/away split features, then saves the master table to `data/processed/features.csv`.
+Weekly refresh of the current season only (needs `DATABASE_URL` and
+`FOOTBALL_DATA_API_KEY`):
 
 ```bash
+python -m src.ingestion.refresh
+```
+
+### 2. Build the feature table
+
+```bash
+# From the database
 python -m src.features.build_dataset
+
+# Or straight from downloaded co.uk CSVs, no database needed
+python -m src.features.build_dataset --from-csv data/raw/couk
 ```
 
-### 3. Train models
+Writes `data/processed/features.csv` (one burn-in season is dropped; override with
+`--burn-in-seasons`, output path with `--output`).
 
-Trains a Logistic Regression baseline and an XGBoost model with 50 Optuna trials. Logs all metrics to MLflow and saves the best model to `src/model/artifacts/xgb_best.pkl`.
+### 3. Train
 
 ```bash
-python -m src.model.train
+python -m src.model.train --n-trials 100
 ```
 
-### 4. Evaluate and generate reports
+Tunes Logistic Regression, XGBoost and LightGBM with Optuna on season
+walk-forward folds, adds calibrated variants and a stacking ensemble, selects on
+mean walk-forward log-loss, refits on all development data and scores once on the
+holdout. Saves `src/model/artifacts/best_model.pkl` and `model_registry.json`.
+The default is 50 trials; the shipped model used 100. Other flags: `--features`,
+`--artifacts-dir`, `--mlflow-uri`, `--seed`.
 
-Loads the best XGBoost model, computes SHAP values, and writes `data/processed/shap_summary.png` and `data/processed/eval_report.txt`.
+### 4. Evaluate
 
 ```bash
 python -m src.model.evaluate
 ```
 
-## Making Predictions
+Scores the saved model on the holdout and writes `data/processed/eval_report.txt`
+and a feature-importance plot at `data/processed/shap_summary.png` (SHAP where the
+model supports it, otherwise a fallback method named in the report).
 
-### Example `curl` request
+### 5. Serve
+
+```bash
+python -m uvicorn src.api.main:app --reload
+python -m src.news.worker          # optional, separate terminal
+
+cd frontend
+npm ci
+npm run dev                        # http://localhost:5173, calls http://localhost:8000
+```
+
+## Model
+
+The current model (trained 2026-10-20) is XGBoost on 25 features:
+
+- **Elo (4):** tuned adaptive Elo shared across competitions (K=14, 5 % season
+  regression to the league mean, per-league online home advantage).
+- **Poisson goals model (7, `pois_*`):** online Poisson/Dixon–Coles expected goals
+  and outcome probabilities.
+- **Form (6) and shots (2):** last-5 points per game, goals for/against, shots.
+- **Rest (2), form sample size (2) and shrunk head-to-head (2).**
+
+The engine computes 44 columns (`ENGINE_COLS`); the model uses the 25 in
+`FEATURE_COLS` (`src/features/columns.py`).
+
+Holdout: 2,049 matches, 2025-08-15 to 2026-10-12, five domestic leagues.
+
+| | Holdout log-loss | Holdout accuracy |
+|---|---|---|
+| **XGBoost (served)** | **0.9884** | **0.521** |
+| Poisson goals model alone | 0.9916 | 0.520 |
+| Elo | 0.9932 | 0.519 |
+| Class prior | 1.0712 | 0.442 |
+| Uniform | 1.0986 | 0.442 |
+
+Walk-forward (8 seasons) log-loss is 0.9829. The Poisson baseline scores 0.9815
+there, but its constants were tuned on those folds, so only the holdout is a clean
+comparison. Like most 1X2 models it almost never predicts a draw as the most
+likely outcome. Experiment log: `docs/model_experiments_2026-10-20.md`.
+
+## API
+
+Full contract: `docs/api_contract.md`. Interactive docs: `http://localhost:8000/docs`.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Model, database and version status |
+| `POST /predict` | `{home_team, away_team, date}` → `{home_win, draw, away_win}` |
+| `GET /upcoming` | Upcoming fixtures with predictions, top factors and details. Query: `league`, `date_from`, `date_to`, `team`, `limit`. Needs the football-data.org key |
+| `GET /track-record` | Accuracy and log-loss of stored predictions against results, plus the backtest. Query: `league`, `weeks`, `team` |
+| `GET /teams` | Flat, alphabetically sorted list of team names |
+| `GET /teams/index` | All known teams with their league, sorted by league then name |
+| `GET /teams/{name}` | Team profile: Elo, league rank, form, home/away split, recent averages, rest days, next fixture. Query: `as_of` |
+| `GET /teams/{name}/matches` | Recent results. Query: `limit`, `venue` (`all`, `home`, `away`) |
+| `GET /teams/{name}/elo-history` | Elo after each match (last 365 days by default). Query: `since` |
+| `GET /h2h?a=&b=` | Head-to-head summary and recent meetings. Query: `limit` |
+| `GET /news` | Cached BBC Sport football headlines and source status. Query: `limit` (max 100) |
+
+Team names are exact canonical names (for example `Arsenal FC`); URL-encode them.
+Unknown teams return `404` on team endpoints and `422` on `/predict`. Finished-match
+history is cached in-process for 300 seconds.
 
 ```bash
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{"home_team": "Arsenal FC", "away_team": "Chelsea FC", "date": "2024-03-15"}'
+  -d '{"home_team": "Arsenal FC", "away_team": "Chelsea FC", "date": "2026-11-01"}'
+
+curl "http://localhost:8000/teams/Arsenal%20FC"
+curl "http://localhost:8000/h2h?a=Arsenal%20FC&b=Chelsea%20FC"
 ```
 
-Expected response:
+## Dashboard
 
-```json
-{
-  "home_win": 0.482,
-  "draw": 0.271,
-  "away_win": 0.247
-}
-```
+- **Upcoming:** fixtures grouped by league with probability bars, an explanation
+  panel and honest "no prediction" cards, plus a "My teams" view. League, search,
+  date and sort filters are kept in the URL hash so views can be shared.
+- **Team page** (`#/team/<name>`): Elo history chart, season and recent-average
+  cards, recent matches, match preparation for the next fixture (with
+  head-to-head), how the model has done on the team, and team news; with a team
+  picker.
+- **Favourites:** star any number of teams and choose a primary one; favourites
+  are highlighted on the dashboard, cards and news. Stored only in the browser
+  (`localStorage` key `ft.favourites.v1`).
+- **Track record** (`#/track-record`) and **News** (`#/news`).
+- Light, dark or system theme (`ft.theme.v1`), a compact header on desktop and a
+  bottom tab bar on mobile.
 
-Probabilities always sum to approximately 1.0. The endpoint returns HTTP 422 if a team name is not found in the database or if the date format is invalid.
+## News
 
-### List available teams
+The `news-worker` checks the
+[BBC football RSS feed](https://feeds.bbci.co.uk/sport/football/rss.xml) every
+hour, even when no browser is open, following
+[BBC RSS guidance](https://www.bbc.co.uk/sport/articles/cqllxj2n4kyo). The News tab
+reads the cache every five minutes while visible. News is marked delayed after 90
+minutes without a successful check and cached headlines expire after 24 hours.
+Only headline metadata and links are stored; news never feeds the model.
+
+## Tests
 
 ```bash
-curl http://localhost:8000/teams
+python -m pytest -q
+
+cd frontend
+npm test
+npm run lint
 ```
 
-## MLflow UI
+PostgreSQL tests are skipped unless `TEST_DATABASE_URL` points to a disposable
+database; they create isolated schemas and never touch the application database.
+Both `postgresql://` and `postgresql+psycopg2://` URLs select the psycopg2 driver.
 
-Open the MLflow tracking UI at [http://localhost:5000](http://localhost:5000) to compare experiments, view logged parameters, and inspect metrics for each training run.
+## MLflow
 
-The experiment is named `football-predictor`. Each run logs:
+Training logs to the `football-predictor` experiment at `--mlflow-uri` (or
+`MLFLOW_TRACKING_URI`). Each run records the selected model, CV settings, tuned
+parameters, walk-forward and holdout metrics for every model and baseline, and the
+registry and model files. With Docker the UI is at
+[http://localhost:5000](http://localhost:5000).
 
-- `accuracy`, `log_loss` — evaluation metrics
-- `n_estimators`, `max_depth`, `learning_rate`, `subsample` — XGBoost hyperparameters
-- Model artifact (`xgb_best.pkl`)
-
-## Project Structure
+## Project structure
 
 ```
 FootballTrainer/
-├── data/
-│   ├── raw/                        # Raw API responses (git-ignored)
-│   └── processed/                  # features.csv, shap_summary.png, eval_report.txt
-├── notebooks/
-│   └── eda.ipynb
+├── alembic/versions/          # 0001 initial, 0002 multi-league matches, 0003 predictions, 0004 news
+├── data/                      # raw/couk CSVs, processed/features.csv and reports (git-ignored)
+├── docs/                      # api_contract.md, model_experiments_2026-10-20.md
 ├── src/
-│   ├── database.py                 # SQLAlchemy engine + session factory
-│   ├── models.py                   # Match and Team ORM models
-│   ├── ingestion/
-│   │   ├── api_client.py           # football-data.org API client with rate limiting
-│   │   └── ingest.py               # Fetch and upsert matches to PostgreSQL
-│   ├── features/
-│   │   ├── form.py                 # Rolling form features (last 5 matches)
-│   │   ├── h2h.py                  # H2H, home/away win rate, fatigue features
-│   │   └── build_dataset.py        # Join all features → features.csv
-│   ├── model/
-│   │   ├── train.py                # Baseline + XGBoost training with Optuna + MLflow
-│   │   ├── evaluate.py             # SHAP analysis and evaluation report
-│   │   └── artifacts/              # Saved model pickles
-│   └── api/
-│       └── main.py                 # FastAPI app (predict, health, teams, upcoming endpoints)
-├── frontend/                       # React / Vite Frontend Application
-│   ├── src/
-│   │   ├── components/             # MatchCard and Dashboard components
-│   │   ├── App.jsx                 # Main application component
-│   │   └── index.css               # Premium dark-mode UI styling
-│   ├── Dockerfile                  # Multi-stage build for frontend
-│   └── package.json
-├── tests/                          # pytest test suite
-├── Dockerfile
-├── docker-compose.yml
-├── entrypoint.sh                   # Runs migrations then starts uvicorn
-├── .env.example
-├── requirements.txt
-└── README.md
+│   ├── database.py, models.py, db_url.py
+│   ├── ingestion/             # api_client, csv_history, team_names, seasons, upsert, ingest, refresh
+│   ├── features/              # engine, elo, columns, build_dataset (form.py / h2h.py: original helpers, tests only)
+│   ├── model/                 # train, evaluate, wrappers, baselines, scoring, artifacts/
+│   ├── api/                   # main, serving, upcoming, track_record, teams, team_stats, history_cache, news, store
+│   └── news/                  # feed, service, worker
+├── frontend/                  # React + Vite app (components, hooks, lib, styles), nginx Dockerfile
+├── tests/                     # pytest suite
+├── Dockerfile, docker-compose.yml, entrypoint.sh
+└── requirements.txt, .env.example
 ```
 
-## Known Limitations and Next Steps
+## Known limitations and next steps
 
-- **Data coverage**: Only Premier League (PL) seasons 2021–2023. Adding more leagues (La Liga, Bundesliga) and more seasons would improve model robustness.
-- **No Elo ratings**: Team strength is captured only via recent form. Adding Elo or FIFA ratings as features could significantly improve accuracy.
-- **Betting odds are deliberately unused**: historical odds columns are still ingested and stored, but by user decision (2026-10-20) they are neither a model input nor an evaluation baseline. Yardsticks are Elo, class prior and uniform.
-- **No injury / lineup data**: Squad availability is a strong predictor but is not currently modelled.
-- **Static model**: The model is trained once offline. A scheduled retraining pipeline (e.g., weekly) would keep predictions fresh as the season progresses.
-- **Single-label target**: The model predicts match outcome only. Extending to scoreline or goal totals would require additional modelling work.
+- **Champions League** has no co.uk history; CL fixtures rely on the shared Elo
+  and domestic form.
+- **Draws** are almost never the most likely outcome; Premier League holdout
+  log-loss (1.036) did not improve with model v2.
+- **No injury, lineup or transfer data.**
+- **Retraining is manual**; run the refresh, rebuild and train steps to update.
+- The team picker cannot yet mark relegated teams, and a relegated side can keep a
+  league rank early in a season until promoted sides have played.
+- Odds stay unused by design.

@@ -1,5 +1,25 @@
 # Football Match Outcome Predictor — Claude Code Context
 
+## Newer context: team analysis, favourites, UI polish and model v2 (2026-10-20)
+
+Branch `codex`, commits `53afd06..7d55279` (not pushed). `MEMORY.md` has the full
+handoff (verification run, gaps, follow-ups). In short:
+
+- API: `/teams/index`, `/teams/{name}`, `/teams/{name}/matches`,
+  `/teams/{name}/elo-history`, `/h2h`, and a `team` filter on `/upcoming` and
+  `/track-record` (contract: `docs/api_contract.md`). History cached 300 s.
+- Frontend: favourite teams (localStorage `ft.favourites.v1`), team page
+  `#/team/<name>`, URL-hash filters, light/dark/system theme (`ft.theme.v1`),
+  mobile bottom tab bar, design tokens and AA contrast.
+- Model v2: tuned adaptive Elo (K=14, season regression 0.05, per-league online
+  home advantage) plus online Poisson/Dixon-Coles goals features; 25
+  `FEATURE_COLS` (the engine still computes 44 `ENGINE_COLS`); XGBoost, 100
+  Optuna trials. Holdout (2,049 matches) log-loss 0.9884 vs Elo 0.9932, class
+  prior 1.0712, uniform 1.0986. See `docs/model_experiments_2026-10-20.md`.
+- The retrained `model_registry.json` has no `bookmaker*` keys, so the note below
+  about legacy keys is out of date (the read-time filter is now a no-op).
+- `docs/api_contract.md` still lists the old Elo constants; the code is authoritative.
+
 ## Newer context: bookmaker comparison removed (2026-10-20)
 
 By user decision the bookmaker baseline and the TICKET-018..022 target
